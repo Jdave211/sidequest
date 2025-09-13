@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
+import { Colors } from '../constants/theme';
 import { useUserStore } from '../stores';
 
 export default function Index() {
@@ -14,30 +15,38 @@ export default function Index() {
   }, []);
 
   useEffect(() => {
-    if (isMounted) {
+    if (isMounted && !authState.isLoading) {
       // Add a small delay to ensure the layout is fully mounted
       const timer = setTimeout(() => {
-        console.log('Navigation check:', {
+        console.log('🔍 Navigation check:', {
           isLoading: authState.isLoading,
           hasUser: !!authState.user,
+          userEmail: authState.user?.email,
           hasCompletedWelcome: authState.onboardingState.hasCompletedWelcome,
           isSignedIn: authState.onboardingState.isSignedIn,
           hasCompletedProfile: authState.onboardingState.hasCompletedProfile,
           isOnboardingComplete: isOnboardingComplete()
         });
 
-        // Check onboarding state and route accordingly
+        // 🔐 AUTHENTICATION GUARD: Only allow access if user is actually signed in
+        if (!authState.user || !authState.onboardingState.isSignedIn) {
+          console.log('🚫 User not authenticated, redirecting to welcome');
+          router.replace('/welcome');
+          return;
+        }
+
+        // ✅ User is authenticated, check onboarding state
         if (isOnboardingComplete()) {
-          console.log('Navigating to social tabs');
+          console.log('✅ User fully onboarded, navigating to main app');
           router.replace('/(tabs)/social');
         } else if (!authState.onboardingState.hasCompletedWelcome) {
-          console.log('Navigating to welcome');
+          console.log('📝 User needs to complete welcome');
           router.replace('/welcome');
         } else if (!authState.onboardingState.hasCompletedProfile) {
-          console.log('Navigating to profile setup');
+          console.log('👤 User needs to complete profile setup');
           router.replace('/profile-setup');
         } else {
-          console.log('Default navigation to social tabs');
+          console.log('✅ Fallback navigation to main app');
           router.replace('/(tabs)/social');
         }
       }, 100);
@@ -46,6 +55,15 @@ export default function Index() {
     }
   }, [isMounted, router, authState, isOnboardingComplete]);
 
-  // Render a simple view while waiting
-  return <View style={{ flex: 1, backgroundColor: '#FAFAFA' }} />;
+  // Show loading spinner while checking authentication
+  return (
+    <View style={{ 
+      flex: 1, 
+      backgroundColor: Colors.background,
+      justifyContent: 'center',
+      alignItems: 'center'
+    }}>
+      <ActivityIndicator size="large" color={Colors.primary} />
+    </View>
+  );
 } 

@@ -1,16 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
-import * as AppleAuthentication from 'expo-apple-authentication';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Platform,
-    SafeAreaView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { BorderRadius, Colors, ComponentSizes, Shadows, Spacing, Typography } from '../constants/theme';
 import { useUserStore } from '../stores';
@@ -18,16 +16,28 @@ import { useUserStore } from '../stores';
 export default function Welcome() {
   const router = useRouter();
   const signInWithGoogle = useUserStore((state) => state.signInWithGoogle);
-  const signInWithApple = useUserStore((state) => state.signInWithApple);
   const completeWelcome = useUserStore((state) => state.completeWelcome);
+  const authState = useUserStore((state) => state.authState);
   const [isLoading, setIsLoading] = useState(false);
+
+  // If user is already authenticated/onboarded, skip welcome
+  useEffect(() => {
+    if (!authState.isLoading && authState.user) {
+      if (authState.onboardingState.hasCompletedProfile) {
+        router.replace('/(tabs)/social');
+      } else {
+        router.replace('/profile-setup');
+      }
+    }
+  }, [authState, router]);
 
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
     try {
       await signInWithGoogle();
       completeWelcome();
-      router.push('/profile-setup');
+      // Let index route / guards decide next screen based on onboarding state
+      router.replace('/');
     } catch (error) {
       console.error('Google sign-in error:', error);
       Alert.alert('Error', 'Failed to sign in with Google. Please try again.');
@@ -36,23 +46,8 @@ export default function Welcome() {
     }
   };
 
-  const handleAppleSignIn = async () => {
-    setIsLoading(true);
-    try {
-      await signInWithApple();
-      completeWelcome();
-      router.push('/profile-setup');
-    } catch (error) {
-      console.error('Apple sign-in error:', error);
-      Alert.alert('Error', 'Failed to sign in with Apple. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleSkip = () => {
-    completeWelcome();
-    router.push('/profile-setup');
+  const handleEmailSignIn = () => {
+    router.push('/auth/email-signin');
   };
 
   return (
@@ -101,17 +96,6 @@ export default function Welcome() {
             </Text>
           </TouchableOpacity>
 
-          {/* Apple Sign In */}
-          {Platform.OS === 'ios' && (
-            <AppleAuthentication.AppleAuthenticationButton
-              buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
-              buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
-              cornerRadius={BorderRadius.md}
-              style={styles.appleButton}
-              onPress={handleAppleSignIn}
-            />
-          )}
-
           {/* Divider */}
           <View style={styles.dividerContainer}>
             <View style={styles.dividerLine} />
@@ -119,14 +103,22 @@ export default function Welcome() {
             <View style={styles.dividerLine} />
           </View>
 
-          {/* Skip Option */}
-          <TouchableOpacity 
-            style={styles.skipButton} 
-            onPress={handleSkip}
+          {/* Email Sign In (auxiliary) */}
+          <TouchableOpacity
+            style={[styles.authButton, styles.googleButton, isLoading && styles.authButtonDisabled]}
+            onPress={handleEmailSignIn}
             disabled={isLoading}
+            activeOpacity={0.8}
           >
-            <Text style={styles.skipText}>Continue as guest</Text>
+            <Ionicons 
+              name="mail-outline" 
+              size={ComponentSizes.icon.medium} 
+              color={Colors.textPrimary} 
+            />
+            <Text style={styles.googleButtonText}>Continue with Email</Text>
           </TouchableOpacity>
+
+          
         </View>
       </View>
 

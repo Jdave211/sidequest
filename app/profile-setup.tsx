@@ -1,13 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-    SafeAreaView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { BorderRadius, Colors, ComponentSizes, Shadows, Spacing, Typography } from '../constants/theme';
 import { useUserStore } from '../stores';
@@ -18,6 +18,19 @@ export default function ProfileSetup() {
   const updateProfile = useUserStore((state) => state.updateProfile);
   const authState = useUserStore((state) => state.authState);
   const [displayName, setDisplayName] = useState(authState.user?.displayName || '');
+
+  // If user is already onboarded, skip this screen entirely
+  useEffect(() => {
+    if (!authState.isLoading) {
+      if (!authState.user) {
+        router.replace('/welcome');
+        return;
+      }
+      if (authState.onboardingState.hasCompletedProfile) {
+        router.replace('/(tabs)/social');
+      }
+    }
+  }, [authState, router]);
 
   const handleContinue = () => {
     if (displayName.trim()) {

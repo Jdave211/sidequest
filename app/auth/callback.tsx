@@ -2,17 +2,28 @@ import { useRouter } from 'expo-router';
 import { useEffect } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
 import { Colors } from '../../constants/theme';
+import { useUserStore } from '../../stores';
 
 export default function AuthCallback() {
   const router = useRouter();
+  const authState = useUserStore((state) => state.authState);
 
   useEffect(() => {
-    // Note: This callback is no longer used with in-app browser OAuth
-    // The WebBrowser handles authentication entirely within the app
-    // Redirecting back to main app immediately
-    console.log('Auth callback hit - redirecting to main app...');
-    router.replace('/');
-  }, [router]);
+    console.log('🔗 Auth callback hit - processing authentication...');
+    
+    // Give a moment for auth state to update from magic link
+    const timer = setTimeout(() => {
+      if (authState.user && authState.onboardingState.isSignedIn) {
+        console.log('✅ Magic link authentication successful, redirecting to main app');
+        router.replace('/');
+      } else {
+        console.log('❌ Authentication failed, redirecting to welcome');
+        router.replace('/welcome');
+      }
+    }, 1000); // Wait 1 second for auth state to update
+
+    return () => clearTimeout(timer);
+  }, [router, authState]);
 
   return (
     <View style={{
@@ -27,7 +38,7 @@ export default function AuthCallback() {
         fontSize: 16,
         color: Colors.textSecondary,
       }}>
-        Redirecting...
+        Completing sign in...
       </Text>
     </View>
   );

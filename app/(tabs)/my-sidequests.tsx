@@ -32,16 +32,15 @@ export default function MySidequests() {
   const [displayNameInput, setDisplayNameInput] = useState('');
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [themePref, setThemePref] = useState<'system' | 'light' | 'dark'>('system');
+  const [settingsQuery, setSettingsQuery] = useState('');
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const insets = useSafeAreaInsets();
 
-  // Dynamically compute sidebar width based on current screen size
-  const sidebarWidth = useMemo(() => {
-    // Aim for ~85% of the screen on phones, cap on large screens
-    const target = screenWidth * 0.85;
-    // keep it within sensible bounds
-    const min = 300;
-    const max = 600;
+  // Modal width (center popup)
+  const modalWidth = useMemo(() => {
+    const target = screenWidth * 0.9;
+    const min = 320;
+    const max = 640;
     return Math.max(min, Math.min(max, target));
   }, [screenWidth]);
 
@@ -84,6 +83,17 @@ export default function MySidequests() {
       await AsyncStorage.setItem('theme_preference', pref);
       // Note: Hook up actual theme switching in app-wide provider later.
     } catch {}
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
+    setIsSettingsOpen(false);
+    router.replace('/welcome');
+  };
+
+  const goEditProfile = () => {
+    setIsSettingsOpen(false);
+    router.push('/profile-setup' as any);
   };
 
   const filteredSidequests = useMemo(() => {
@@ -198,10 +208,12 @@ export default function MySidequests() {
     <SafeAreaView style={styles.container}>
       {/* Settings Header Row */}
       <View style={styles.settingsRow}>
-        <Text style={styles.settingsTitle}>My Sidequests</Text>
+        <Text style={styles.settingsTitle}>
+          {authUser?.displayName ? `${authUser.displayName}'s Sidequests` : 'My Sidequests'}
+        </Text>
         <TouchableOpacity
           style={styles.settingsButton}
-          onPress={openSettings}
+          onPress={() => router.push('/settings' as any)}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <Ionicons name="settings-outline" size={ComponentSizes.icon.large} color={Colors.textSecondary} />
@@ -295,75 +307,88 @@ export default function MySidequests() {
       {/* Settings Sidebar Overlay */}
       {isSettingsOpen && (
         <View style={styles.overlayContainer}>
-          <TouchableOpacity
-            style={[styles.overlayBackdrop, { width: Math.max(0, screenWidth - sidebarWidth) }]}
-            onPress={() => setIsSettingsOpen(false)}
-          />
-          <View
-            style={[
-              styles.sidebar,
-              {
-                width: sidebarWidth,
-                maxWidth: sidebarWidth,
-                paddingTop: insets.top + Spacing.lg,
-                paddingRight: insets.right + Spacing.xl,
-              },
-            ]}
-          >
-            <View style={styles.sidebarHeader}>
-              <Text style={styles.sidebarTitle}>Settings</Text>
-              <TouchableOpacity onPress={() => setIsSettingsOpen(false)} hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}>
-                <Ionicons name="close" size={ComponentSizes.icon.large} color={Colors.textSecondary} />
+          <TouchableOpacity style={styles.overlayBackdrop} onPress={() => setIsSettingsOpen(false)} />
+          <View style={[styles.modalCard, { width: modalWidth, maxWidth: modalWidth, paddingTop: insets.top + Spacing.lg }]}> 
+            <View style={styles.modalHeader}>
+              <TouchableOpacity style={styles.backButton} onPress={() => setIsSettingsOpen(false)} hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}>
+                <Ionicons name="chevron-back" size={ComponentSizes.icon.large} color={Colors.textPrimary} />
+                <Text style={styles.backText}>Back</Text>
               </TouchableOpacity>
+              <Text style={styles.modalTitle}>Settings</Text>
+              <View style={{ width: 40 }} />
             </View>
 
-            {/* Profile Section */}
-            <Text style={styles.sectionTitle}>Profile</Text>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Display name</Text>
-              <View style={styles.inputRow}>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Enter display name"
-                  placeholderTextColor={Colors.textSecondary}
-                  value={displayNameInput}
-                  onChangeText={setDisplayNameInput}
-                />
-                <TouchableOpacity style={styles.primaryBtn} onPress={saveDisplayName} disabled={isSavingProfile}>
-                  <Text style={styles.primaryBtnText}>{isSavingProfile ? 'Saving...' : 'Save'}</Text>
-                </TouchableOpacity>
+            {/* Handle */}
+            {!!authUser && (
+              <Text style={styles.handleText}>
+                @{authUser.displayName || authUser.email?.split('@')[0]}
+              </Text>
+            )}
+
+            {/* Search */}
+            <View style={styles.sidebarSearchBar}>
+              <Ionicons name="search" size={ComponentSizes.icon.medium} color={Colors.textSecondary} />
+              <TextInput
+                style={styles.sidebarSearchInput}
+                placeholder="Search settings"
+                placeholderTextColor={Colors.textSecondary}
+                value={settingsQuery}
+                onChangeText={setSettingsQuery}
+              />
+            </View>
+
+            {/* Sections */}
+            <Text style={styles.sectionHeader}>Your account</Text>
+            <TouchableOpacity style={styles.row} onPress={goEditProfile} activeOpacity={0.7}>
+              <View style={styles.rowIcon}><Ionicons name="person-outline" size={ComponentSizes.icon.medium} color={Colors.textSecondary} /></View>
+              <View style={styles.rowBody}>
+                <Text style={styles.rowTitle}>Edit profile</Text>
+                <Text style={styles.rowSubtitle}>Update your display name</Text>
               </View>
-            </View>
+              <Ionicons name="chevron-forward" size={ComponentSizes.icon.medium} color={Colors.textSecondary} />
+            </TouchableOpacity>
+            <View style={styles.separator} />
 
-            {/* Manage Account Section */}
-            <Text style={styles.sectionTitle}>Manage account</Text>
-            <View style={styles.rowBtns}>
-              <TouchableOpacity style={styles.dangerBtn} onPress={() => signOut()}>
-                <Text style={styles.dangerBtnText}>Sign out</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.secondaryBtn}
-                onPress={() => Alert.alert('Coming soon', 'Delete account will be available soon.')}
-              >
-                <Text style={styles.secondaryBtnText}>Delete account</Text>
-              </TouchableOpacity>
-            </View>
+            <Text style={styles.sectionHeader}>Security and account access</Text>
+            <TouchableOpacity style={styles.row} onPress={handleSignOut} activeOpacity={0.7}>
+              <View style={styles.rowIcon}><Ionicons name="log-out-outline" size={ComponentSizes.icon.medium} color={Colors.textSecondary} /></View>
+              <View style={styles.rowBody}>
+                <Text style={styles.rowTitle}>Sign out</Text>
+                <Text style={styles.rowSubtitle}>Sign out of your account on this device</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={ComponentSizes.icon.medium} color={Colors.textSecondary} />
+            </TouchableOpacity>
+            <View style={styles.separator} />
+            <TouchableOpacity style={styles.row} onPress={() => Alert.alert('Coming soon', 'Delete account will be available soon.')} activeOpacity={0.7}>
+              <View style={styles.rowIcon}><Ionicons name="trash-outline" size={ComponentSizes.icon.medium} color={Colors.textSecondary} /></View>
+              <View style={styles.rowBody}>
+                <Text style={styles.rowTitle}>Delete account</Text>
+                <Text style={styles.rowSubtitle}>Permanently delete your account (coming soon)</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={ComponentSizes.icon.medium} color={Colors.textSecondary} />
+            </TouchableOpacity>
+            <View style={styles.separator} />
 
-            {/* Theme Section */}
-            <Text style={styles.sectionTitle}>Appearance</Text>
-            <View style={styles.themeRow}>
-              {(['system','light','dark'] as const).map((opt) => (
-                <TouchableOpacity
-                  key={opt}
-                  style={[styles.themeChip, themePref === opt && styles.themeChipActive]}
-                  onPress={() => setTheme(opt)}
-                >
-                  <Text style={[styles.themeChipText, themePref === opt && styles.themeChipTextActive]}>
-                    {opt.charAt(0).toUpperCase() + opt.slice(1)}
-                  </Text>
+            <Text style={styles.sectionHeader}>Appearance</Text>
+            {(['system','light','dark'] as const).map((opt) => (
+              <React.Fragment key={opt}>
+                <TouchableOpacity style={styles.row} onPress={() => setTheme(opt)} activeOpacity={0.7}>
+                  <View style={styles.rowIcon}>
+                    <Ionicons
+                      name={opt === 'system' ? 'phone-portrait-outline' : opt === 'light' ? 'sunny-outline' : 'moon-outline'}
+                      size={ComponentSizes.icon.medium}
+                      color={Colors.textSecondary}
+                    />
+                  </View>
+                  <View style={styles.rowBody}>
+                    <Text style={styles.rowTitle}>{opt === 'system' ? 'Use system theme' : opt === 'light' ? 'Light mode' : 'Dark mode'}</Text>
+                    {themePref === opt ? <Text style={styles.rowSubtitle}>Selected</Text> : null}
+                  </View>
+                  <Ionicons name="chevron-forward" size={ComponentSizes.icon.medium} color={Colors.textSecondary} />
                 </TouchableOpacity>
-              ))}
-            </View>
+                <View style={styles.separator} />
+              </React.Fragment>
+            ))}
           </View>
         </View>
       )}
@@ -417,6 +442,64 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: Spacing.lg,
+  },
+  handleText: {
+    color: Colors.textSecondary,
+    fontSize: Typography.fontSize.sm,
+    marginBottom: Spacing.md,
+    paddingHorizontal: 2,
+  },
+  sidebarSearchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.white,
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    ...Shadows.sm,
+    gap: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  sidebarSearchInput: {
+    flex: 1,
+    color: Colors.textPrimary,
+    fontSize: Typography.fontSize.base,
+  },
+  sectionHeader: {
+    paddingVertical: Spacing.md,
+    color: Colors.textPrimary,
+    fontSize: Typography.fontSize.lg,
+    fontWeight: Typography.fontWeight.bold,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Spacing.lg,
+  },
+  rowIcon: {
+    width: 28,
+    alignItems: 'center',
+    marginRight: Spacing.md,
+  },
+  rowBody: {
+    flex: 1,
+  },
+  rowTitle: {
+    color: Colors.textPrimary,
+    fontSize: Typography.fontSize.base,
+    fontWeight: Typography.fontWeight.semibold,
+  },
+  rowSubtitle: {
+    color: Colors.textSecondary,
+    marginTop: 4,
+    fontSize: Typography.fontSize.sm,
+  },
+  separator: {
+    height: 1,
+    backgroundColor: Colors.border,
   },
   sidebarTitle: {
     fontSize: Typography.fontSize.xl,
@@ -535,11 +618,10 @@ const styles = StyleSheet.create({
     ...Shadows.sm,
     gap: Spacing.md,
   },
-  searchInput: {
+  sidebarSearchInput: {
     flex: 1,
-    fontSize: Typography.fontSize.base,
     color: Colors.textPrimary,
-    paddingVertical: 0,
+    fontSize: Typography.fontSize.base,
   },
   filterContainer: {
     paddingBottom: Spacing.lg,

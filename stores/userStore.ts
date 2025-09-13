@@ -14,6 +14,9 @@ interface UserStore {
   // Actions
   signInWithGoogle: () => Promise<void>;
   signInWithApple: () => Promise<void>;
+  signInWithEmail: (email: string, password: string) => Promise<void>;
+  signUpWithEmail: (email: string, password: string) => Promise<void>;
+  signInWithMagicLink: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<User>) => Promise<void>;
   completeWelcome: () => void;
@@ -136,17 +139,18 @@ export const useUserStore = create<UserStore>()(
         };
         console.log('Created user from session data:', user.displayName);
       } else if (existingUser && !error) {
-        console.log('Existing user found, using existing profile');
+        console.log('✅ Existing user found, using existing profile - SKIPPING ONBOARDING');
         // User exists, use their data
         user = {
           id: existingUser.id,
           email: existingUser.email,
           displayName: existingUser.display_name,
+          avatarUrl: existingUser.avatar_url,
           interests: [],
           createdAt: new Date(existingUser.created_at),
           updatedAt: new Date(existingUser.updated_at),
         };
-        console.log('Loaded existing user:', user.displayName);
+        console.log('🔄 Loaded returning user:', user.displayName);
       } else {
         console.log('New user detected, creating profile...');
         // New user, create profile
@@ -209,21 +213,45 @@ export const useUserStore = create<UserStore>()(
         isExistingUser: !!existingUser
       });
 
+      // Detect truly new users vs returning users
+      // A user is "new" if they were created very recently (within last 30 seconds)
+      const userCreatedAt = new Date(supabaseUser.created_at);
+      const now = new Date();
+      const timeSinceCreation = now.getTime() - userCreatedAt.getTime();
+      const isNewUser = timeSinceCreation < 30000; // Less than 30 seconds = new user
+      const isReturningUser = !isNewUser;
+      
+      console.log('🔍 User creation analysis:', {
+        createdAt: userCreatedAt.toISOString(),
+        timeSinceCreation: `${Math.round(timeSinceCreation / 1000)}s ago`,
+        isNewUser,
+        isReturningUser,
+        existingUserFound: !!existingUser
+      });
+      
+      const onboardingState = isReturningUser ? {
+        hasCompletedWelcome: true,
+        isSignedIn: true,
+        hasCompletedProfile: true, // Returning users skip all onboarding
+      } : {
+        hasCompletedWelcome: false, // New users need to go through welcome
+        isSignedIn: true,
+        hasCompletedProfile: false, // New users need to complete profile
+      };
+      
+      console.log(isReturningUser ? '🔄 RETURNING USER - Skipping all onboarding' : '🆕 NEW USER - Requires onboarding');
+
       set({
         authState: {
           user,
           isLoading: false,
-          onboardingState: {
-            hasCompletedWelcome: true,
-            isSignedIn: true,
-            hasCompletedProfile: !!existingUser,
-          }
+          onboardingState
         }
       });
 
-      console.log('User session processing completed successfully!');
+      console.log('✅ User session processing completed successfully!');
       get().setLoading(false);
-      console.log('User is now signed in:', user.email);
+      console.log('🎉 User is now signed in:', user.email);
     } catch (error: any) {
       console.error('Error handling user session:', error);
       console.error('Session error stack:', error.stack);
@@ -360,6 +388,18 @@ export const useUserStore = create<UserStore>()(
             throw new Error('Missing access or refresh token in query parameters');
           }
         } else {
+          // Surface Supabase auth errors from query params to avoid misleading token errors
+          try {
+            const urlObj = new URL(url);
+            const err = urlObj.searchParams.get('error');
+            const errCode = urlObj.searchParams.get('error_code');
+            const errDesc = urlObj.searchParams.get('error_description');
+            if (err || errCode || errDesc) {
+              const message = `OAuth error: ${err || ''} ${errCode || ''} ${errDesc || ''}`.trim();
+              console.error(message);
+              throw new Error(message);
+            }
+          } catch {}
           console.error('No access token found in callback URL');
           console.error('Callback URL format:', url);
           throw new Error('No access token found in callback URL');
@@ -388,6 +428,58 @@ export const useUserStore = create<UserStore>()(
       }
       
       Alert.alert('Sign In Error', errorMessage);
+      throw error;
+    }
+  },
+
+  // Email sign-in helpers
+  signInWithEmail: async (email: string, password: string) => {
+    get().setLoading(true);
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      // onAuthStateChange will handle session
+    } catch (error: any) {
+      console.error('Email sign-in error:', error);
+      Alert.alert('Sign In Error', error.message || 'Failed to sign in.');
+      get().setLoading(false);
+      throw error;
+    }
+  },
+
+  signUpWithEmail: async (email: string, password: string) => {
+    get().setLoading(true);
+    try {
+      const { data, error } = await supabase.auth.signUp({ email, password });
+      if (error) throw error;
+      Alert.alert('Check your email', 'We sent you a confirmation link.');
+      get().setLoading(false);
+    } catch (error: any) {
+      console.error('Email sign-up error:', error);
+      Alert.alert('Sign Up Error', error.message || 'Failed to sign up.');
+      get().setLoading(false);
+      throw error;
+    }
+  },
+
+  // Passwordless magic link
+  signInWithMagicLink: async (email: string) => {
+    try {
+      get().setLoading(true);
+      const { data, error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          emailRedirectTo: 'sidequest://auth/callback',
+          shouldCreateUser: true,
+        },
+      });
+      if (error) throw error;
+      Alert.alert('Check your email', 'We sent you a sign-in link. Open it on this device to continue.');
+      get().setLoading(false);
+    } catch (error: any) {
+      console.error('Magic link error:', error);
+      Alert.alert('Magic Link Error', error.message || 'Failed to send magic link.');
+      get().setLoading(false);
       throw error;
     }
   },
@@ -445,19 +537,38 @@ export const useUserStore = create<UserStore>()(
     if (!authState.user) return;
     
     try {
-      // Update in Supabase
+      console.log('🔄 Updating user profile:', updates);
+      
+      // Prepare update object for Supabase
+      const supabaseUpdates: any = {
+        updated_at: new Date().toISOString(),
+      };
+      
+      // Add display name if provided
+      if (updates.displayName !== undefined) {
+        supabaseUpdates.display_name = updates.displayName;
+      }
+      
+      // Add avatar URL if provided
+      if (updates.avatarUrl !== undefined) {
+        supabaseUpdates.avatar_url = updates.avatarUrl;
+      }
+      
+      console.log('📤 Sending to Supabase:', supabaseUpdates);
+      
+      // Update in Supabase database
       const { error } = await supabase
         .from('users')
-        .update({
-          display_name: updates.displayName,
-          updated_at: new Date().toISOString(),
-        })
+        .update(supabaseUpdates)
         .eq('id', authState.user.id);
 
       if (error) {
-        console.error('Error updating profile:', error);
+        console.error('❌ Supabase update error:', error);
+        Alert.alert('Update Failed', 'Failed to update profile. Please try again.');
         return;
       }
+      
+      console.log('✅ Profile updated in Supabase successfully');
 
       // Update local state
       set((state) => ({
@@ -470,8 +581,11 @@ export const useUserStore = create<UserStore>()(
           }
         }
       }));
+      
+      console.log('✅ Local state updated successfully');
     } catch (error) {
-      console.error('Error updating profile:', error);
+      console.error('❌ Profile update error:', error);
+      Alert.alert('Update Failed', 'Failed to update profile. Please try again.');
     }
   },
 

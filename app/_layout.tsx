@@ -31,6 +31,7 @@ export default function RootLayout() {
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="add-sidequest" options={{ title: "Add Sidequest", presentation: "modal" }} />
       <Stack.Screen name="sidequest/[id]" options={{ title: "Sidequest Details" }} />
+      <Stack.Screen name="settings" options={{ title: "Settings", presentation: "modal", headerShown: false }} />
     </Stack>
   );
 }
