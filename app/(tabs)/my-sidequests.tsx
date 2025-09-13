@@ -2,22 +2,24 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import {
-    Alert,
-    FlatList,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Alert,
+  FlatList,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { BackgroundTextures, BorderRadius, Colors, ComponentSizes, getDifficultyColor, getStatusColor, Shadows, Spacing, Typography } from '../../constants/theme';
-import { useSidequests } from '../../contexts/SidequestContext';
+import { useSidequestStore } from '../../stores';
 import { SidequestStatus } from '../../types/sidequest';
 
 export default function MySidequests() {
-  const { sidequests, updateSidequest, deleteSidequest } = useSidequests();
+  const sidequests = useSidequestStore((state) => state.sidequests);
+  const updateSidequest = useSidequestStore((state) => state.updateSidequest);
+  const deleteSidequest = useSidequestStore((state) => state.deleteSidequest);
   const [selectedStatus, setSelectedStatus] = useState<SidequestStatus | 'ALL'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
 

@@ -7,17 +7,11 @@ export default function AuthCallback() {
   const router = useRouter();
 
   useEffect(() => {
-    // This component just handles the OAuth callback route
-    // The actual auth handling is done in UserContext via onAuthStateChange
-    console.log('OAuth callback route hit');
-    
-    // Longer delay to allow session processing
-    const timer = setTimeout(() => {
-      console.log('Redirecting from callback to main app...');
-      router.replace('/');
-    }, 2000);
-
-    return () => clearTimeout(timer);
+    // Note: This callback is no longer used with in-app browser OAuth
+    // The WebBrowser handles authentication entirely within the app
+    // Redirecting back to main app immediately
+    console.log('Auth callback hit - redirecting to main app...');
+    router.replace('/');
   }, [router]);
 
   return (
@@ -33,7 +27,7 @@ export default function AuthCallback() {
         fontSize: 16,
         color: Colors.textSecondary,
       }}>
-        Completing sign in...
+        Redirecting...
       </Text>
     </View>
   );

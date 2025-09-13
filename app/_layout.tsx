@@ -1,24 +1,28 @@
 import { Stack } from "expo-router";
-import { SidequestProvider } from "../contexts/SidequestContext";
-import { SocialProvider } from "../contexts/SocialContext";
-import { UserProvider } from "../contexts/UserContext";
+import { useEffect } from "react";
+import { useSidequestStore, useUserStore } from "../stores";
 
 export default function RootLayout() {
+  const initializeAuth = useUserStore((state) => state.initializeAuth);
+  const initializeSampleData = useSidequestStore((state) => state.initializeSampleData);
+
+  useEffect(() => {
+    // Initialize auth and sample data when app starts
+    const cleanup = initializeAuth();
+    initializeSampleData();
+
+    return cleanup;
+  }, [initializeAuth, initializeSampleData]);
+
   return (
-    <UserProvider>
-      <SidequestProvider>
-        <SocialProvider>
-        <Stack>
-          <Stack.Screen name="index" options={{ headerShown: false }} />
-          <Stack.Screen name="welcome" options={{ headerShown: false }} />
-          <Stack.Screen name="profile-setup" options={{ headerShown: false }} />
-          <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="add-sidequest" options={{ title: "Add Sidequest", presentation: "modal" }} />
-          <Stack.Screen name="sidequest/[id]" options={{ title: "Sidequest Details" }} />
-        </Stack>
-        </SocialProvider>
-      </SidequestProvider>
-    </UserProvider>
+    <Stack>
+      <Stack.Screen name="index" options={{ headerShown: false }} />
+      <Stack.Screen name="welcome" options={{ headerShown: false }} />
+      <Stack.Screen name="profile-setup" options={{ headerShown: false }} />
+      <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="add-sidequest" options={{ title: "Add Sidequest", presentation: "modal" }} />
+      <Stack.Screen name="sidequest/[id]" options={{ title: "Sidequest Details" }} />
+    </Stack>
   );
 }

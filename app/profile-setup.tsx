@@ -10,11 +10,13 @@ import {
     View,
 } from 'react-native';
 import { BorderRadius, Colors, ComponentSizes, Shadows, Spacing, Typography } from '../constants/theme';
-import { useUser } from '../contexts/UserContext';
+import { useUserStore } from '../stores';
 
 export default function ProfileSetup() {
   const router = useRouter();
-  const { authState, completeProfile, updateProfile } = useUser();
+  const completeProfile = useUserStore((state) => state.completeProfile);
+  const updateProfile = useUserStore((state) => state.updateProfile);
+  const authState = useUserStore((state) => state.authState);
   const [displayName, setDisplayName] = useState(authState.user?.displayName || '');
 
   const handleContinue = () => {

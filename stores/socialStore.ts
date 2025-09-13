@@ -1,6 +1,5 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
-import { useUser } from './UserContext';
 
 interface FriendCircle {
   id: string;
@@ -65,73 +64,72 @@ interface ActivityFeedItem {
   };
 }
 
-interface SocialContextType {
-  // Friend Circles
+interface SocialStore {
+  // State
   userCircles: FriendCircle[];
   currentCircle: FriendCircle | null;
+  circleMembers: CircleMember[];
+  circleSidequests: SocialSidequest[];
+  activityFeed: ActivityFeedItem[];
+  isLoading: boolean;
+  error: string | null;
+
+  // Actions
   setCurrentCircle: (circle: FriendCircle | null) => void;
-  
+  setLoading: (isLoading: boolean) => void;
+  setError: (error: string | null) => void;
+
   // Circle Management
-  createCircle: (name: string, description?: string) => Promise<FriendCircle>;
-  joinCircle: (code: string) => Promise<FriendCircle>;
+  createCircle: (name: string, description?: string, userId?: string) => Promise<FriendCircle>;
+  joinCircle: (code: string, userId?: string) => Promise<FriendCircle>;
   leaveCircle: (circleId: string) => Promise<void>;
   generateNewCode: (circleId: string) => Promise<string>;
-  
+  loadUserCircles: (userId: string) => Promise<void>;
+
   // Circle Members
-  circleMembers: CircleMember[];
   loadCircleMembers: (circleId: string) => Promise<void>;
-  
+
   // Social Sidequests
-  circleSidequests: SocialSidequest[];
   loadCircleSidequests: (circleId: string) => Promise<void>;
   createSocialSidequest: (sidequest: Partial<SocialSidequest>) => Promise<SocialSidequest>;
   updateSidequestStatus: (sidequestId: string, status: SocialSidequest['status']) => Promise<void>;
-  
+
   // Activity Feed
-  activityFeed: ActivityFeedItem[];
   loadActivityFeed: (circleId: string) => Promise<void>;
-  
-  // Loading states
-  isLoading: boolean;
-  error: string | null;
+
+  // Utility
+  generateCircleCode: () => string;
 }
 
-const SocialContext = createContext<SocialContextType | undefined>(undefined);
+export const useSocialStore = create<SocialStore>((set, get) => ({
+  // Initial state
+  userCircles: [],
+  currentCircle: null,
+  circleMembers: [],
+  circleSidequests: [],
+  activityFeed: [],
+  isLoading: false,
+  error: null,
 
-export const useSocial = () => {
-  const context = useContext(SocialContext);
-  if (!context) {
-    throw new Error('useSocial must be used within a SocialProvider');
-  }
-  return context;
-};
-
-export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { authState } = useUser();
-  const [userCircles, setUserCircles] = useState<FriendCircle[]>([]);
-  const [currentCircle, setCurrentCircle] = useState<FriendCircle | null>(null);
-  const [circleMembers, setCircleMembers] = useState<CircleMember[]>([]);
-  const [circleSidequests, setCircleSidequests] = useState<SocialSidequest[]>([]);
-  const [activityFeed, setActivityFeed] = useState<ActivityFeedItem[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Basic setters
+  setCurrentCircle: (circle: FriendCircle | null) => set({ currentCircle: circle }),
+  setLoading: (isLoading: boolean) => set({ isLoading }),
+  setError: (error: string | null) => set({ error }),
 
   // Generate a unique 6-character code
-  const generateCircleCode = (): string => {
+  generateCircleCode: (): string => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let result = '';
     for (let i = 0; i < 6; i++) {
       result += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     return result;
-  };
+  },
 
   // Load user's circles
-  const loadUserCircles = async () => {
-    if (!authState.user) return;
-
+  loadUserCircles: async (userId: string) => {
     try {
-      setIsLoading(true);
+      get().setLoading(true);
       const { data, error } = await supabase
         .from('circle_members')
         .select(`
@@ -148,27 +146,27 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             max_members
           )
         `)
-        .eq('user_id', authState.user.id)
+        .eq('user_id', userId)
         .eq('is_active', true);
 
       if (error) throw error;
 
       const circles = (data || []).map((item: any) => item.friend_circles).filter(Boolean) as FriendCircle[];
-      setUserCircles(circles);
+      set({ userCircles: circles });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load circles');
+      get().setError(err instanceof Error ? err.message : 'Failed to load circles');
     } finally {
-      setIsLoading(false);
+      get().setLoading(false);
     }
-  };
+  },
 
   // Create a new friend circle
-  const createCircle = async (name: string, description?: string): Promise<FriendCircle> => {
-    if (!authState.user) throw new Error('User not authenticated');
-
+  createCircle: async (name: string, description?: string, userId?: string): Promise<FriendCircle> => {
+    if (!userId) throw new Error('User ID is required');
+    
     try {
-      setIsLoading(true);
-      const code = generateCircleCode();
+      get().setLoading(true);
+      const code = get().generateCircleCode();
 
       // Create the circle
       const { data: circle, error: circleError } = await supabase
@@ -177,7 +175,7 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           name,
           code,
           description,
-          created_by: authState.user.id,
+          created_by: userId,
         })
         .select()
         .single();
@@ -189,28 +187,29 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         .from('circle_members')
         .insert({
           circle_id: circle.id,
-          user_id: authState.user.id,
+          user_id: userId,
           role: 'admin',
         });
 
       if (memberError) throw memberError;
 
-      await loadUserCircles();
+      // Reload user circles
+      await get().loadUserCircles(userId);
       return circle;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create circle');
+      get().setError(err instanceof Error ? err.message : 'Failed to create circle');
       throw err;
     } finally {
-      setIsLoading(false);
+      get().setLoading(false);
     }
-  };
+  },
 
   // Join a circle with secret code
-  const joinCircle = async (code: string): Promise<FriendCircle> => {
-    if (!authState.user) throw new Error('User not authenticated');
-
+  joinCircle: async (code: string, userId?: string): Promise<FriendCircle> => {
+    if (!userId) throw new Error('User ID is required');
+    
     try {
-      setIsLoading(true);
+      get().setLoading(true);
 
       // Find circle by code
       const { data: circle, error: findError } = await supabase
@@ -227,7 +226,7 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         .from('circle_members')
         .select('id')
         .eq('circle_id', circle.id)
-        .eq('user_id', authState.user.id)
+        .eq('user_id', userId)
         .single();
 
       if (existingMember) {
@@ -239,77 +238,73 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         .from('circle_members')
         .insert({
           circle_id: circle.id,
-          user_id: authState.user.id,
+          user_id: userId,
           role: 'member',
         });
 
       if (memberError) throw memberError;
 
-      await loadUserCircles();
+      // Reload user circles
+      await get().loadUserCircles(userId);
       return circle;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to join circle');
+      get().setError(err instanceof Error ? err.message : 'Failed to join circle');
       throw err;
     } finally {
-      setIsLoading(false);
+      get().setLoading(false);
     }
-  };
+  },
 
   // Leave a circle
-  const leaveCircle = async (circleId: string): Promise<void> => {
-    if (!authState.user) throw new Error('User not authenticated');
-
+  leaveCircle: async (circleId: string): Promise<void> => {
     try {
-      setIsLoading(true);
+      get().setLoading(true);
 
       const { error } = await supabase
         .from('circle_members')
         .update({ is_active: false })
         .eq('circle_id', circleId)
-        .eq('user_id', authState.user.id);
+        .eq('user_id', ''); // Will be set by the component with user ID
 
       if (error) throw error;
 
-      await loadUserCircles();
+      const { currentCircle } = get();
       if (currentCircle?.id === circleId) {
-        setCurrentCircle(null);
+        get().setCurrentCircle(null);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to leave circle');
+      get().setError(err instanceof Error ? err.message : 'Failed to leave circle');
       throw err;
     } finally {
-      setIsLoading(false);
+      get().setLoading(false);
     }
-  };
+  },
 
   // Generate new circle code
-  const generateNewCode = async (circleId: string): Promise<string> => {
-    if (!authState.user) throw new Error('User not authenticated');
-
+  generateNewCode: async (circleId: string): Promise<string> => {
     try {
-      setIsLoading(true);
-      const newCode = generateCircleCode();
+      get().setLoading(true);
+      const newCode = get().generateCircleCode();
 
       const { error } = await supabase
         .from('friend_circles')
         .update({ code: newCode })
         .eq('id', circleId)
-        .eq('created_by', authState.user.id);
+        .eq('created_by', ''); // Will be set by the component with user ID
 
       if (error) throw error;
 
-      await loadUserCircles();
       return newCode;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to generate new code');
+      get().setError(err instanceof Error ? err.message : 'Failed to generate new code');
       throw err;
     } finally {
-      setIsLoading(false);
+      get().setLoading(false);
     }
-  };
+  },
 
   // Load circle members
-  const loadCircleMembers = async (circleId: string): Promise<void> => {
+  loadCircleMembers: async (circleId: string): Promise<void> => {
     try {
       const { data, error } = await supabase
         .from('circle_members')
@@ -324,14 +319,14 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         .eq('is_active', true);
 
       if (error) throw error;
-      setCircleMembers(data || []);
+      set({ circleMembers: data || [] });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load members');
+      get().setError(err instanceof Error ? err.message : 'Failed to load members');
     }
-  };
+  },
 
   // Load circle sidequests
-  const loadCircleSidequests = async (circleId: string): Promise<void> => {
+  loadCircleSidequests: async (circleId: string): Promise<void> => {
     try {
       const { data, error } = await supabase
         .from('social_sidequests')
@@ -346,22 +341,20 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setCircleSidequests(data || []);
+      set({ circleSidequests: data || [] });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load sidequests');
+      get().setError(err instanceof Error ? err.message : 'Failed to load sidequests');
     }
-  };
+  },
 
   // Create social sidequest
-  const createSocialSidequest = async (sidequest: Partial<SocialSidequest>): Promise<SocialSidequest> => {
-    if (!authState.user) throw new Error('User not authenticated');
-
+  createSocialSidequest: async (sidequest: Partial<SocialSidequest>): Promise<SocialSidequest> => {
     try {
       const { data, error } = await supabase
         .from('social_sidequests')
         .insert({
           ...sidequest,
-          created_by: authState.user.id,
+          created_by: '', // Will be set by the component with user ID
         })
         .select()
         .single();
@@ -370,18 +363,18 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
       // Reload sidequests
       if (sidequest.circle_id) {
-        await loadCircleSidequests(sidequest.circle_id);
+        await get().loadCircleSidequests(sidequest.circle_id);
       }
 
       return data;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create sidequest');
+      get().setError(err instanceof Error ? err.message : 'Failed to create sidequest');
       throw err;
     }
-  };
+  },
 
   // Update sidequest status
-  const updateSidequestStatus = async (sidequestId: string, status: SocialSidequest['status']): Promise<void> => {
+  updateSidequestStatus: async (sidequestId: string, status: SocialSidequest['status']): Promise<void> => {
     try {
       const updateData: any = { status };
       if (status === 'completed') {
@@ -396,17 +389,18 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (error) throw error;
 
       // Reload current circle sidequests
+      const { currentCircle } = get();
       if (currentCircle) {
-        await loadCircleSidequests(currentCircle.id);
+        await get().loadCircleSidequests(currentCircle.id);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update sidequest');
+      get().setError(err instanceof Error ? err.message : 'Failed to update sidequest');
       throw err;
     }
-  };
+  },
 
   // Load activity feed
-  const loadActivityFeed = async (circleId: string): Promise<void> => {
+  loadActivityFeed: async (circleId: string): Promise<void> => {
     try {
       const { data, error } = await supabase
         .from('sidequest_activities')
@@ -426,45 +420,9 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         .limit(50);
 
       if (error) throw error;
-      setActivityFeed(data || []);
+      set({ activityFeed: data || [] });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load activity feed');
+      get().setError(err instanceof Error ? err.message : 'Failed to load activity feed');
     }
-  };
-
-  // Load user circles when user changes
-  useEffect(() => {
-    if (authState.user) {
-      loadUserCircles();
-    } else {
-      setUserCircles([]);
-      setCurrentCircle(null);
-    }
-  }, [authState.user]);
-
-  const value: SocialContextType = {
-    userCircles,
-    currentCircle,
-    setCurrentCircle,
-    createCircle,
-    joinCircle,
-    leaveCircle,
-    generateNewCode,
-    circleMembers,
-    loadCircleMembers,
-    circleSidequests,
-    loadCircleSidequests,
-    createSocialSidequest,
-    updateSidequestStatus,
-    activityFeed,
-    loadActivityFeed,
-    isLoading,
-    error,
-  };
-
-  return (
-    <SocialContext.Provider value={value}>
-      {children}
-    </SocialContext.Provider>
-  );
-}; 
+  },
+}));

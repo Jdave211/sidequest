@@ -1,31 +1,66 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import { create } from 'zustand';
 import { Sidequest, SidequestCategory, SidequestDifficulty, SidequestStatus } from '../types/sidequest';
 
-interface SidequestContextType {
+interface SidequestStore {
+  // State
   sidequests: Sidequest[];
+  
+  // Actions
   addSidequest: (sidequest: Omit<Sidequest, 'id' | 'createdAt' | 'updatedAt'>) => void;
   updateSidequest: (id: string, updates: Partial<Sidequest>) => void;
   deleteSidequest: (id: string) => void;
   getSidequestById: (id: string) => Sidequest | undefined;
   getSidequestsByStatus: (status: SidequestStatus) => Sidequest[];
   getSidequestsByCategory: (category: SidequestCategory) => Sidequest[];
+  initializeSampleData: () => void;
 }
 
-const SidequestContext = createContext<SidequestContextType | undefined>(undefined);
+export const useSidequestStore = create<SidequestStore>((set, get) => ({
+  // Initial state
+  sidequests: [],
 
-export const useSidequests = () => {
-  const context = useContext(SidequestContext);
-  if (!context) {
-    throw new Error('useSidequests must be used within a SidequestProvider');
-  }
-  return context;
-};
+  // Actions
+  addSidequest: (sidequestData: Omit<Sidequest, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const newSidequest: Sidequest = {
+      ...sidequestData,
+      id: Date.now().toString(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    set((state) => ({ 
+      sidequests: [...state.sidequests, newSidequest] 
+    }));
+  },
 
-export const SidequestProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [sidequests, setSidequests] = useState<Sidequest[]>([]);
+  updateSidequest: (id: string, updates: Partial<Sidequest>) => {
+    set((state) => ({
+      sidequests: state.sidequests.map(sidequest => 
+        sidequest.id === id 
+          ? { ...sidequest, ...updates, updatedAt: new Date() }
+          : sidequest
+      )
+    }));
+  },
 
-  // Initialize with sample data
-  useEffect(() => {
+  deleteSidequest: (id: string) => {
+    set((state) => ({
+      sidequests: state.sidequests.filter(sidequest => sidequest.id !== id)
+    }));
+  },
+
+  getSidequestById: (id: string) => {
+    return get().sidequests.find(sidequest => sidequest.id === id);
+  },
+
+  getSidequestsByStatus: (status: SidequestStatus) => {
+    return get().sidequests.filter(sidequest => sidequest.status === status);
+  },
+
+  getSidequestsByCategory: (category: SidequestCategory) => {
+    return get().sidequests.filter(sidequest => sidequest.category === category);
+  },
+
+  initializeSampleData: () => {
     const sampleSidequests: Sidequest[] = [
       {
         id: '1',
@@ -70,56 +105,6 @@ export const SidequestProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         notes: 'Completed in 28 minutes! Felt amazing.'
       }
     ];
-    setSidequests(sampleSidequests);
-  }, []);
-
-  const addSidequest = (sidequestData: Omit<Sidequest, 'id' | 'createdAt' | 'updatedAt'>) => {
-    const newSidequest: Sidequest = {
-      ...sidequestData,
-      id: Date.now().toString(),
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    setSidequests(prev => [...prev, newSidequest]);
-  };
-
-  const updateSidequest = (id: string, updates: Partial<Sidequest>) => {
-    setSidequests(prev => prev.map(sidequest => 
-      sidequest.id === id 
-        ? { ...sidequest, ...updates, updatedAt: new Date() }
-        : sidequest
-    ));
-  };
-
-  const deleteSidequest = (id: string) => {
-    setSidequests(prev => prev.filter(sidequest => sidequest.id !== id));
-  };
-
-  const getSidequestById = (id: string) => {
-    return sidequests.find(sidequest => sidequest.id === id);
-  };
-
-  const getSidequestsByStatus = (status: SidequestStatus) => {
-    return sidequests.filter(sidequest => sidequest.status === status);
-  };
-
-  const getSidequestsByCategory = (category: SidequestCategory) => {
-    return sidequests.filter(sidequest => sidequest.category === category);
-  };
-
-  const value: SidequestContextType = {
-    sidequests,
-    addSidequest,
-    updateSidequest,
-    deleteSidequest,
-    getSidequestById,
-    getSidequestsByStatus,
-    getSidequestsByCategory,
-  };
-
-  return (
-    <SidequestContext.Provider value={value}>
-      {children}
-    </SidequestContext.Provider>
-  );
-}; 
+    set({ sidequests: sampleSidequests });
+  },
+}));

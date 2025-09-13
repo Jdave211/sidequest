@@ -13,29 +13,27 @@ import {
     View,
 } from 'react-native';
 import { BorderRadius, Colors, ComponentSizes, Shadows, Spacing, Typography } from '../../constants/theme';
-import { useSocial } from '../../contexts/SocialContext';
-import { useUser } from '../../contexts/UserContext';
+import { useSocialStore, useUserStore } from '../../stores';
 
 type SocialTab = 'spaces' | 'feed';
 
 export default function Social() {
   const router = useRouter();
-  const { authState } = useUser();
-  const { 
-    userCircles, 
-    currentCircle, 
-    setCurrentCircle,
-    circleSidequests,
-    circleMembers,
-    activityFeed,
-    isLoading,
-    error,
-    createCircle,
-    joinCircle,
-    loadCircleSidequests,
-    loadCircleMembers,
-    loadActivityFeed
-  } = useSocial();
+  const authState = useUserStore((state) => state.authState);
+  const userCircles = useSocialStore((state) => state.userCircles);
+  const currentCircle = useSocialStore((state) => state.currentCircle);
+  const setCurrentCircle = useSocialStore((state) => state.setCurrentCircle);
+  const circleSidequests = useSocialStore((state) => state.circleSidequests);
+  const circleMembers = useSocialStore((state) => state.circleMembers);
+  const activityFeed = useSocialStore((state) => state.activityFeed);
+  const isLoading = useSocialStore((state) => state.isLoading);
+  const error = useSocialStore((state) => state.error);
+  const createCircle = useSocialStore((state) => state.createCircle);
+  const joinCircle = useSocialStore((state) => state.joinCircle);
+  const loadCircleSidequests = useSocialStore((state) => state.loadCircleSidequests);
+  const loadCircleMembers = useSocialStore((state) => state.loadCircleMembers);
+  const loadActivityFeed = useSocialStore((state) => state.loadActivityFeed);
+  const loadUserCircles = useSocialStore((state) => state.loadUserCircles);
   
   const [activeTab, setActiveTab] = useState<SocialTab>('spaces');
   const [showJoinForm, setShowJoinForm] = useState(false);
@@ -43,6 +41,13 @@ export default function Social() {
   const [joinCode, setJoinCode] = useState('');
   const [circleName, setCircleName] = useState('');
   const [circleDescription, setCircleDescription] = useState('');
+
+  // Load user circles when user changes
+  useEffect(() => {
+    if (authState.user) {
+      loadUserCircles(authState.user.id);
+    }
+  }, [authState.user, loadUserCircles]);
 
   // Load data when current circle changes
   useEffect(() => {
@@ -60,7 +65,7 @@ export default function Social() {
     }
 
     try {
-      await joinCircle(joinCode.trim());
+      await joinCircle(joinCode.trim(), authState.user?.id);
       setJoinCode('');
       setShowJoinForm(false);
       Alert.alert('Success!', 'You\'ve joined the circle successfully!');
@@ -76,7 +81,7 @@ export default function Social() {
     }
 
     try {
-      const newCircle = await createCircle(circleName.trim(), circleDescription.trim() || undefined);
+      const newCircle = await createCircle(circleName.trim(), circleDescription.trim() || undefined, authState.user?.id);
       setCircleName('');
       setCircleDescription('');
       setShowCreateForm(false);

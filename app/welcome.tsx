@@ -12,11 +12,13 @@ import {
     View,
 } from 'react-native';
 import { BorderRadius, Colors, ComponentSizes, Shadows, Spacing, Typography } from '../constants/theme';
-import { useUser } from '../contexts/UserContext';
+import { useUserStore } from '../stores';
 
 export default function Welcome() {
   const router = useRouter();
-  const { signInWithGoogle, signInWithApple, completeWelcome } = useUser();
+  const signInWithGoogle = useUserStore((state) => state.signInWithGoogle);
+  const signInWithApple = useUserStore((state) => state.signInWithApple);
+  const completeWelcome = useUserStore((state) => state.completeWelcome);
   const [isLoading, setIsLoading] = useState(false);
 
   const handleGoogleSignIn = async () => {

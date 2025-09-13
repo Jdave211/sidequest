@@ -1,11 +1,12 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
-import { useUser } from '../contexts/UserContext';
+import { useUserStore } from '../stores';
 
 export default function Index() {
   const router = useRouter();
-  const { authState, isOnboardingComplete } = useUser();
+  const authState = useUserStore((state) => state.authState);
+  const isOnboardingComplete = useUserStore((state) => state.isOnboardingComplete);
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {

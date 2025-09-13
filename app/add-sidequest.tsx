@@ -13,11 +13,11 @@ import {
     View,
 } from 'react-native';
 import { BorderRadius, Colors, Components, ComponentSizes, Shadows, Spacing, Typography } from '../constants/theme';
-import { useSidequests } from '../contexts/SidequestContext';
+import { useSidequestStore } from '../stores';
 import { SidequestCategory, SidequestDifficulty, SidequestStatus } from '../types/sidequest';
 
 export default function AddSidequest() {
-  const { addSidequest } = useSidequests();
+  const addSidequest = useSidequestStore((state) => state.addSidequest);
   const [formData, setFormData] = useState({
     title: '',
     description: '',

@@ -17,14 +17,14 @@ export default {
     ],
     ios: {
       supportsTablet: true,
-      bundleIdentifier: "com.yourcompany.sidequest"
+      bundleIdentifier: "com.davejaga.sidequest"
     },
     android: {
       adaptiveIcon: {
         foregroundImage: "./assets/images/adaptive-icon.png",
         backgroundColor: "#ffffff"
       },
-      package: "com.yourcompany.sidequest"
+      package: "com.davejaga.sidequest"
     },
     web: {
       bundler: "metro",

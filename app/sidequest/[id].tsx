@@ -2,23 +2,25 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
 import {
-  Alert,
-  Modal,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    Alert,
+    Modal,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { BorderRadius, Colors, Components, ComponentSizes, getDifficultyColor, getStatusColor, Shadows, Spacing, Typography } from '../../constants/theme';
-import { useSidequests } from '../../contexts/SidequestContext';
+import { useSidequestStore } from '../../stores';
 import { SidequestStatus } from '../../types/sidequest';
 
 export default function SidequestDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { getSidequestById, updateSidequest, deleteSidequest } = useSidequests();
+  const getSidequestById = useSidequestStore((state) => state.getSidequestById);
+  const updateSidequest = useSidequestStore((state) => state.updateSidequest);
+  const deleteSidequest = useSidequestStore((state) => state.deleteSidequest);
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [editedNotes, setEditedNotes] = useState('');
   const [isEditingProgress, setIsEditingProgress] = useState(false);
