@@ -8,10 +8,18 @@ export default function RootLayout() {
 
   useEffect(() => {
     // Initialize auth and sample data when app starts
-    const cleanup = initializeAuth();
-    initializeSampleData();
+    let cleanup: (() => void) | undefined;
+    
+    const initialize = async () => {
+      cleanup = await initializeAuth();
+      initializeSampleData();
+    };
+    
+    initialize();
 
-    return cleanup;
+    return () => {
+      if (cleanup) cleanup();
+    };
   }, [initializeAuth, initializeSampleData]);
 
   return (

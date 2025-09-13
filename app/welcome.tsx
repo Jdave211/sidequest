@@ -3,6 +3,7 @@ import * as AppleAuthentication from 'expo-apple-authentication';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
+    ActivityIndicator,
     Alert,
     Platform,
     SafeAreaView,
@@ -82,14 +83,22 @@ export default function Welcome() {
             disabled={isLoading}
             activeOpacity={0.8}
           >
-            <Ionicons 
-              name="logo-google" 
-              size={ComponentSizes.icon.medium} 
-              color={Colors.textPrimary} 
-            />
+            {isLoading ? (
+              <ActivityIndicator 
+                size="small" 
+                color={Colors.primary} 
+                style={{ marginRight: Spacing.sm }}
+              />
+            ) : (
+              <Ionicons 
+                name="logo-google" 
+                size={ComponentSizes.icon.medium} 
+                color={Colors.textPrimary} 
+              />
+            )}
             <Text style={styles.googleButtonText}>
               {isLoading ? 'Signing In...' : 'Continue with Google'}
-              </Text>
+            </Text>
           </TouchableOpacity>
 
           {/* Apple Sign In */}
@@ -120,6 +129,7 @@ export default function Welcome() {
           </TouchableOpacity>
         </View>
       </View>
+
     </SafeAreaView>
   );
 }
