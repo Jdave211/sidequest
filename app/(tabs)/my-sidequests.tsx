@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -10,18 +11,80 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BackgroundTextures, BorderRadius, Colors, ComponentSizes, getDifficultyColor, getStatusColor, Shadows, Spacing, Typography } from '../../constants/theme';
-import { useSidequestStore } from '../../stores';
+import { useSidequestStore, useUserStore } from '../../stores';
 import { SidequestStatus } from '../../types/sidequest';
 
 export default function MySidequests() {
   const sidequests = useSidequestStore((state) => state.sidequests);
   const updateSidequest = useSidequestStore((state) => state.updateSidequest);
   const deleteSidequest = useSidequestStore((state) => state.deleteSidequest);
+  const signOut = useUserStore((state) => state.signOut);
+  const authUser = useUserStore((state) => state.authState.user);
+  const updateUserProfile = useUserStore((state) => state.updateProfile);
   const [selectedStatus, setSelectedStatus] = useState<SidequestStatus | 'ALL'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [displayNameInput, setDisplayNameInput] = useState('');
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [themePref, setThemePref] = useState<'system' | 'light' | 'dark'>('system');
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+
+  // Dynamically compute sidebar width based on current screen size
+  const sidebarWidth = useMemo(() => {
+    // Aim for ~85% of the screen on phones, cap on large screens
+    const target = screenWidth * 0.85;
+    // keep it within sensible bounds
+    const min = 300;
+    const max = 600;
+    return Math.max(min, Math.min(max, target));
+  }, [screenWidth]);
+
+  useEffect(() => {
+    const loadPrefs = async () => {
+      try {
+        const stored = await AsyncStorage.getItem('theme_preference');
+        if (stored === 'light' || stored === 'dark' || stored === 'system') {
+          setThemePref(stored);
+        }
+      } catch {}
+    };
+    loadPrefs();
+  }, []);
+
+  const openSettings = () => {
+    setDisplayNameInput(authUser?.displayName || '');
+    setIsSettingsOpen(true);
+  };
+
+  const saveDisplayName = async () => {
+    if (!displayNameInput.trim()) {
+      Alert.alert('Validation', 'Display name cannot be empty.');
+      return;
+    }
+    try {
+      setIsSavingProfile(true);
+      await updateUserProfile({ displayName: displayNameInput.trim() });
+      Alert.alert('Success', 'Profile updated.');
+    } catch (e) {
+      Alert.alert('Error', 'Failed to update profile. Please try again.');
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  const setTheme = async (pref: 'system' | 'light' | 'dark') => {
+    try {
+      setThemePref(pref);
+      await AsyncStorage.setItem('theme_preference', pref);
+      // Note: Hook up actual theme switching in app-wide provider later.
+    } catch {}
+  };
 
   const filteredSidequests = useMemo(() => {
     let filtered = selectedStatus === 'ALL' 
@@ -133,6 +196,17 @@ export default function MySidequests() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Settings Header Row */}
+      <View style={styles.settingsRow}>
+        <Text style={styles.settingsTitle}>My Sidequests</Text>
+        <TouchableOpacity
+          style={styles.settingsButton}
+          onPress={openSettings}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Ionicons name="settings-outline" size={ComponentSizes.icon.large} color={Colors.textSecondary} />
+        </TouchableOpacity>
+      </View>
       {/* Fixed header with search */}
       <View style={styles.fixedHeader}>
         {/* Search Bar */}
@@ -217,6 +291,82 @@ export default function MySidequests() {
       >
         <Ionicons name="add" size={ComponentSizes.icon.large} color={Colors.textInverse} />
       </TouchableOpacity>
+
+      {/* Settings Sidebar Overlay */}
+      {isSettingsOpen && (
+        <View style={styles.overlayContainer}>
+          <TouchableOpacity
+            style={[styles.overlayBackdrop, { width: Math.max(0, screenWidth - sidebarWidth) }]}
+            onPress={() => setIsSettingsOpen(false)}
+          />
+          <View
+            style={[
+              styles.sidebar,
+              {
+                width: sidebarWidth,
+                maxWidth: sidebarWidth,
+                paddingTop: insets.top + Spacing.lg,
+                paddingRight: insets.right + Spacing.xl,
+              },
+            ]}
+          >
+            <View style={styles.sidebarHeader}>
+              <Text style={styles.sidebarTitle}>Settings</Text>
+              <TouchableOpacity onPress={() => setIsSettingsOpen(false)} hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}>
+                <Ionicons name="close" size={ComponentSizes.icon.large} color={Colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Profile Section */}
+            <Text style={styles.sectionTitle}>Profile</Text>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Display name</Text>
+              <View style={styles.inputRow}>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter display name"
+                  placeholderTextColor={Colors.textSecondary}
+                  value={displayNameInput}
+                  onChangeText={setDisplayNameInput}
+                />
+                <TouchableOpacity style={styles.primaryBtn} onPress={saveDisplayName} disabled={isSavingProfile}>
+                  <Text style={styles.primaryBtnText}>{isSavingProfile ? 'Saving...' : 'Save'}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Manage Account Section */}
+            <Text style={styles.sectionTitle}>Manage account</Text>
+            <View style={styles.rowBtns}>
+              <TouchableOpacity style={styles.dangerBtn} onPress={() => signOut()}>
+                <Text style={styles.dangerBtnText}>Sign out</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.secondaryBtn}
+                onPress={() => Alert.alert('Coming soon', 'Delete account will be available soon.')}
+              >
+                <Text style={styles.secondaryBtnText}>Delete account</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Theme Section */}
+            <Text style={styles.sectionTitle}>Appearance</Text>
+            <View style={styles.themeRow}>
+              {(['system','light','dark'] as const).map((opt) => (
+                <TouchableOpacity
+                  key={opt}
+                  style={[styles.themeChip, themePref === opt && styles.themeChipActive]}
+                  onPress={() => setTheme(opt)}
+                >
+                  <Text style={[styles.themeChipText, themePref === opt && styles.themeChipTextActive]}>
+                    {opt.charAt(0).toUpperCase() + opt.slice(1)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -226,6 +376,141 @@ const styles = StyleSheet.create({
     flex: 1,
     // Add subtle texture
     ...BackgroundTextures.paper,
+  },
+  settingsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.lg,
+  },
+  settingsTitle: {
+    fontSize: Typography.fontSize['2xl'],
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.textPrimary,
+  },
+  settingsButton: {
+    padding: Spacing.sm,
+  },
+  overlayContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    flexDirection: 'row',
+  },
+  overlayBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  sidebar: {
+    width: '80%',
+    backgroundColor: Colors.surface,
+    borderLeftWidth: 1,
+    borderLeftColor: Colors.border,
+    padding: Spacing.xl,
+    ...Shadows.lg,
+  },
+  sidebarHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.lg,
+  },
+  sidebarTitle: {
+    fontSize: Typography.fontSize.xl,
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.textPrimary,
+  },
+  sectionTitle: {
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.semibold,
+    color: Colors.textSecondary,
+    marginTop: Spacing.lg,
+    marginBottom: Spacing.sm,
+  },
+  inputGroup: {
+    gap: Spacing.sm,
+  },
+  inputLabel: {
+    fontSize: Typography.fontSize.xs,
+    color: Colors.textSecondary,
+  },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  input: {
+    flex: 1,
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    color: Colors.textPrimary,
+  },
+  rowBtns: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    alignItems: 'center',
+  },
+  primaryBtn: {
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    backgroundColor: Colors.primary,
+    borderRadius: BorderRadius.md,
+  },
+  primaryBtnText: {
+    color: Colors.textInverse,
+    fontWeight: Typography.fontWeight.semibold,
+  },
+  secondaryBtn: {
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: BorderRadius.md,
+  },
+  secondaryBtnText: {
+    color: Colors.textPrimary,
+    fontWeight: Typography.fontWeight.semibold,
+  },
+  dangerBtn: {
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    backgroundColor: '#ef4444',
+    borderRadius: BorderRadius.md,
+  },
+  dangerBtnText: {
+    color: Colors.textInverse,
+    fontWeight: Typography.fontWeight.semibold,
+  },
+  themeRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+  },
+  themeChip: {
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: BorderRadius.full,
+  },
+  themeChipActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  themeChipText: {
+    color: Colors.textPrimary,
+    fontWeight: Typography.fontWeight.semibold,
+  },
+  themeChipTextActive: {
+    color: Colors.textInverse,
   },
   fixedHeader: {
     backgroundColor: Colors.background,
