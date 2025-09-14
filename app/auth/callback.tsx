@@ -9,12 +9,12 @@ export default function AuthCallback() {
   const authState = useUserStore((state) => state.authState);
 
   useEffect(() => {
-    console.log('🔗 Auth callback hit - processing authentication...');
+    console.log('Auth callback hit - processing authentication...');
     
     // Give a moment for auth state to update from magic link
     const timer = setTimeout(() => {
       if (authState.user && authState.onboardingState.isSignedIn) {
-        console.log('✅ Magic link authentication successful, redirecting to main app');
+        console.log('Magic link authentication successful, redirecting to main app');
         router.replace('/');
       } else {
         console.log('❌ Authentication failed, redirecting to welcome');

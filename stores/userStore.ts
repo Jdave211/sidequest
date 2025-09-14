@@ -139,7 +139,7 @@ export const useUserStore = create<UserStore>()(
         };
         console.log('Created user from session data:', user.displayName);
       } else if (existingUser && !error) {
-        console.log('✅ Existing user found, using existing profile - SKIPPING ONBOARDING');
+        console.log('Existing user found, using existing profile - skipping onboarding');
         // User exists, use their data
         user = {
           id: existingUser.id,
@@ -150,7 +150,7 @@ export const useUserStore = create<UserStore>()(
           createdAt: new Date(existingUser.created_at),
           updatedAt: new Date(existingUser.updated_at),
         };
-        console.log('🔄 Loaded returning user:', user.displayName);
+        console.log('Loaded returning user:', user.displayName);
       } else {
         console.log('New user detected, creating profile...');
         // New user, create profile
@@ -221,7 +221,7 @@ export const useUserStore = create<UserStore>()(
       const isNewUser = timeSinceCreation < 30000; // Less than 30 seconds = new user
       const isReturningUser = !isNewUser;
       
-      console.log('🔍 User creation analysis:', {
+      console.log('User creation analysis:', {
         createdAt: userCreatedAt.toISOString(),
         timeSinceCreation: `${Math.round(timeSinceCreation / 1000)}s ago`,
         isNewUser,
@@ -239,7 +239,7 @@ export const useUserStore = create<UserStore>()(
         hasCompletedProfile: false, // New users need to complete profile
       };
       
-      console.log(isReturningUser ? '🔄 RETURNING USER - Skipping all onboarding' : '🆕 NEW USER - Requires onboarding');
+      console.log(isReturningUser ? 'Returning user - skipping all onboarding' : 'New user - requires onboarding');
 
       set({
         authState: {
@@ -249,9 +249,9 @@ export const useUserStore = create<UserStore>()(
         }
       });
 
-      console.log('✅ User session processing completed successfully!');
+      console.log('User session processing completed successfully');
       get().setLoading(false);
-      console.log('🎉 User is now signed in:', user.email);
+      console.log('User is now signed in:', user.email);
     } catch (error: any) {
       console.error('Error handling user session:', error);
       console.error('Session error stack:', error.stack);
@@ -537,7 +537,7 @@ export const useUserStore = create<UserStore>()(
     if (!authState.user) return;
     
     try {
-      console.log('🔄 Updating user profile:', updates);
+      console.log('Updating user profile:', updates);
       
       // Prepare update object for Supabase
       const supabaseUpdates: any = {
@@ -568,7 +568,7 @@ export const useUserStore = create<UserStore>()(
         return;
       }
       
-      console.log('✅ Profile updated in Supabase successfully');
+      console.log('Profile updated in Supabase successfully');
 
       // Update local state
       set((state) => ({
@@ -582,7 +582,7 @@ export const useUserStore = create<UserStore>()(
         }
       }));
       
-      console.log('✅ Local state updated successfully');
+      console.log('Local state updated successfully');
     } catch (error) {
       console.error('❌ Profile update error:', error);
       Alert.alert('Update Failed', 'Failed to update profile. Please try again.');

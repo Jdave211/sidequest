@@ -15,14 +15,14 @@ export default function TabLayout() {
     if (!authState.isLoading) {
       // Check if user is properly authenticated
       if (!authState.user || !authState.onboardingState.isSignedIn) {
-        console.log('🚫 Unauthorized access to main app, redirecting to welcome');
+        console.log('Unauthorized access to main app, redirecting to welcome');
         router.replace('/welcome');
         return;
       }
 
       // Check if user has completed onboarding
       if (!isOnboardingComplete()) {
-        console.log('🚫 Incomplete onboarding, redirecting to setup');
+        console.log('Incomplete onboarding, redirecting to setup');
         if (!authState.onboardingState.hasCompletedWelcome) {
           router.replace('/welcome');
         } else if (!authState.onboardingState.hasCompletedProfile) {
@@ -31,7 +31,7 @@ export default function TabLayout() {
         return;
       }
 
-      console.log('✅ User authenticated and onboarded, allowing main app access');
+      console.log('User authenticated and onboarded, allowing main app access');
     }
   }, [authState, isOnboardingComplete, router]);
 

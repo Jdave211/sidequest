@@ -82,8 +82,8 @@ interface SocialStore {
   // Circle Management
   createCircle: (name: string, description?: string, userId?: string) => Promise<FriendCircle>;
   joinCircle: (code: string, userId?: string) => Promise<FriendCircle>;
-  leaveCircle: (circleId: string) => Promise<void>;
-  generateNewCode: (circleId: string) => Promise<string>;
+  leaveCircle: (circleId: string, userId: string) => Promise<void>;
+  generateNewCode: (circleId: string, userId: string) => Promise<string>;
   loadUserCircles: (userId: string) => Promise<void>;
 
   // Circle Members
@@ -91,7 +91,7 @@ interface SocialStore {
 
   // Social Sidequests
   loadCircleSidequests: (circleId: string) => Promise<void>;
-  createSocialSidequest: (sidequest: Partial<SocialSidequest>) => Promise<SocialSidequest>;
+  createSocialSidequest: (sidequest: Partial<SocialSidequest> & { created_by?: string }) => Promise<SocialSidequest>;
   updateSidequestStatus: (sidequestId: string, status: SocialSidequest['status']) => Promise<void>;
 
   // Activity Feed
@@ -182,19 +182,9 @@ export const useSocialStore = create<SocialStore>((set, get) => ({
 
       if (circleError) throw circleError;
 
-      // Add creator as admin member
-      const { error: memberError } = await supabase
-        .from('circle_members')
-        .insert({
-          circle_id: circle.id,
-          user_id: userId,
-          role: 'admin',
-        });
-
-      if (memberError) throw memberError;
-
-      // Reload user circles
+      // Reload user circles and set current circle
       await get().loadUserCircles(userId);
+      set({ currentCircle: circle });
       return circle;
     } catch (err) {
       get().setError(err instanceof Error ? err.message : 'Failed to create circle');
@@ -244,8 +234,9 @@ export const useSocialStore = create<SocialStore>((set, get) => ({
 
       if (memberError) throw memberError;
 
-      // Reload user circles
+      // Reload user circles and set current circle
       await get().loadUserCircles(userId);
+      set({ currentCircle: circle });
       return circle;
     } catch (err) {
       get().setError(err instanceof Error ? err.message : 'Failed to join circle');
@@ -256,7 +247,7 @@ export const useSocialStore = create<SocialStore>((set, get) => ({
   },
 
   // Leave a circle
-  leaveCircle: async (circleId: string): Promise<void> => {
+  leaveCircle: async (circleId: string, userId: string): Promise<void> => {
     try {
       get().setLoading(true);
 
@@ -264,7 +255,7 @@ export const useSocialStore = create<SocialStore>((set, get) => ({
         .from('circle_members')
         .update({ is_active: false })
         .eq('circle_id', circleId)
-        .eq('user_id', ''); // Will be set by the component with user ID
+        .eq('user_id', userId);
 
       if (error) throw error;
 
@@ -281,7 +272,7 @@ export const useSocialStore = create<SocialStore>((set, get) => ({
   },
 
   // Generate new circle code
-  generateNewCode: async (circleId: string): Promise<string> => {
+  generateNewCode: async (circleId: string, userId: string): Promise<string> => {
     try {
       get().setLoading(true);
       const newCode = get().generateCircleCode();
@@ -290,7 +281,7 @@ export const useSocialStore = create<SocialStore>((set, get) => ({
         .from('friend_circles')
         .update({ code: newCode })
         .eq('id', circleId)
-        .eq('created_by', ''); // Will be set by the component with user ID
+        .eq('created_by', userId);
 
       if (error) throw error;
 
@@ -348,13 +339,12 @@ export const useSocialStore = create<SocialStore>((set, get) => ({
   },
 
   // Create social sidequest
-  createSocialSidequest: async (sidequest: Partial<SocialSidequest>): Promise<SocialSidequest> => {
+  createSocialSidequest: async (sidequest: Partial<SocialSidequest> & { created_by?: string }): Promise<SocialSidequest> => {
     try {
       const { data, error } = await supabase
         .from('social_sidequests')
         .insert({
           ...sidequest,
-          created_by: '', // Will be set by the component with user ID
         })
         .select()
         .single();

@@ -1,5 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
+import * as Sharing from 'expo-sharing';
 import React, { useEffect, useState } from 'react';
 import {
     Alert,
@@ -30,6 +32,8 @@ export default function Social() {
   const error = useSocialStore((state) => state.error);
   const createCircle = useSocialStore((state) => state.createCircle);
   const joinCircle = useSocialStore((state) => state.joinCircle);
+  const leaveCircle = useSocialStore((state) => state.leaveCircle);
+  const generateNewCode = useSocialStore((state) => state.generateNewCode);
   const loadCircleSidequests = useSocialStore((state) => state.loadCircleSidequests);
   const loadCircleMembers = useSocialStore((state) => state.loadCircleMembers);
   const loadActivityFeed = useSocialStore((state) => state.loadActivityFeed);
@@ -58,6 +62,91 @@ export default function Social() {
     }
   }, [currentCircle]);
 
+  const copyToClipboard = async (text: string, message: string) => {
+    try {
+      await Clipboard.setStringAsync(text);
+      Alert.alert('Copied!', message);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to copy to clipboard');
+    }
+  };
+
+  const shareSpace = async (circle: any) => {
+    try {
+      const shareUrl = `sidequest://space/join?code=${circle.code}`;
+      const message = `Join my space "${circle.name}" on Sidequest!\n\nCode: ${circle.code}\nLink: ${shareUrl}`;
+      
+      if (await Sharing.isAvailableAsync()) {
+        // Create a temporary text file to share
+        await Clipboard.setStringAsync(message);
+        Alert.alert('Ready to Share!', 'The invite message has been copied to your clipboard. You can now paste it in any app to share with friends.');
+      } else {
+        // Fallback to clipboard
+        await Clipboard.setStringAsync(message);
+        Alert.alert('Copied!', 'Share message copied to clipboard. Paste it anywhere to invite friends!');
+      }
+    } catch (error) {
+      console.error('Share error:', error);
+      Alert.alert('Error', 'Failed to share space invite');
+    }
+  };
+
+  const handleLeaveSpace = async () => {
+    if (!currentCircle || !authState.user) return;
+    
+    Alert.alert(
+      'Leave Space',
+      `Are you sure you want to leave "${currentCircle.name}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Leave', 
+          style: 'destructive', 
+          onPress: async () => {
+            try {
+              await leaveCircle(currentCircle.id, authState.user!.id);
+              Alert.alert('Left Space', `You've left "${currentCircle.name}"`);
+              // Reload circles to update UI
+              await loadUserCircles(authState.user!.id);
+            } catch (error) {
+              Alert.alert('Error', 'Failed to leave space. Please try again.');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleGenerateNewCode = async () => {
+    if (!currentCircle || !authState.user) return;
+    
+    Alert.alert(
+      'Generate New Code',
+      'This will invalidate the current invite code. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Generate', 
+          onPress: async () => {
+            try {
+              const newCode = await generateNewCode(currentCircle.id, authState.user!.id);
+              Alert.alert(
+                'New Code Generated!', 
+                `New invite code: ${newCode}`,
+                [
+                  { text: 'Copy', onPress: () => copyToClipboard(newCode, 'New code copied!') },
+                  { text: 'OK' }
+                ]
+              );
+            } catch (error) {
+              Alert.alert('Error', 'Only the space creator can generate new codes.');
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const handleJoinCircle = async () => {
     if (!joinCode.trim()) {
       Alert.alert('Error', 'Please enter a valid circle code');
@@ -65,10 +154,11 @@ export default function Social() {
     }
 
     try {
-      await joinCircle(joinCode.trim(), authState.user?.id);
+      const joinedCircle = await joinCircle(joinCode.trim(), authState.user?.id);
       setJoinCode('');
       setShowJoinForm(false);
-      Alert.alert('Success!', 'You\'ve joined the circle successfully!');
+      setActiveTab('feed'); // Switch to activity feed to show the new space
+      Alert.alert('Joined Space', `Welcome to "${joinedCircle.name}"!`);
     } catch (error) {
       Alert.alert('Error', error instanceof Error ? error.message : 'Failed to join circle');
     }
@@ -85,12 +175,19 @@ export default function Social() {
       setCircleName('');
       setCircleDescription('');
       setShowCreateForm(false);
-    Alert.alert(
-        'Circle Created!', 
-        `Your circle "${newCircle.name}" has been created.\n\nShare this code with friends: ${newCircle.code}`,
+      Alert.alert(
+        'Space Created', 
+        `"${newCircle.name}" is ready!\n\nInvite code: ${newCircle.code}`,
         [
-          { text: 'Copy Code', onPress: () => {/* TODO: Copy to clipboard */} },
-          { text: 'OK' }
+          { 
+            text: 'Copy Code', 
+            onPress: () => copyToClipboard(newCircle.code, 'Invite code copied!')
+          },
+          { 
+            text: 'Share', 
+            onPress: () => shareSpace(newCircle)
+          },
+          { text: 'Done' }
         ]
       );
     } catch (error) {
@@ -211,15 +308,26 @@ export default function Social() {
           <TouchableOpacity
             style={styles.headerButton}
             onPress={() => setShowJoinForm(true)}
+            activeOpacity={0.7}
           >
             <Ionicons name="add-circle-outline" size={ComponentSizes.icon.medium} color={Colors.primary} />
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.headerButton}
             onPress={() => setShowCreateForm(true)}
+            activeOpacity={0.7}
           >
             <Ionicons name="create-outline" size={ComponentSizes.icon.medium} color={Colors.primary} />
           </TouchableOpacity>
+          {currentCircle && (
+            <TouchableOpacity
+              style={[styles.headerButton, { backgroundColor: Colors.backgroundSecondary }]}
+              onPress={handleLeaveSpace}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="exit-outline" size={ComponentSizes.icon.medium} color={Colors.textSecondary} />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -306,24 +414,62 @@ export default function Social() {
                 Choose a space from the "My Spaces" tab to view its activity feed.
               </Text>
             </View>
-          ) : activityFeed.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Ionicons name="chatbubbles-outline" size={ComponentSizes.icon.xlarge} color={Colors.textSecondary} />
-              <Text style={styles.emptyTitle}>No Activity Yet</Text>
-              <Text style={styles.emptyDescription}>
-                Start creating sidequests in "{currentCircle.name}" to see activity here!
-              </Text>
-          </View>
-        ) : (
-            <FlatList
-              data={activityFeed}
-              renderItem={renderActivityItem}
-              keyExtractor={(item) => item.id}
-              contentContainerStyle={styles.listContent}
-              refreshControl={
-                <RefreshControl refreshing={isLoading} onRefresh={onRefresh} />
-              }
-            />
+          ) : (
+            <>
+              {/* Current Space Info Bar */}
+              <View style={styles.currentSpaceBar}>
+                <View style={styles.currentSpaceInfo}>
+                  <Text style={styles.currentSpaceName}>{currentCircle.name}</Text>
+                  <Text style={styles.currentSpaceCode}>Code: {currentCircle.code}</Text>
+                </View>
+                <View style={styles.currentSpaceActions}>
+                  <TouchableOpacity 
+                    style={styles.spaceActionButton} 
+                    onPress={() => copyToClipboard(currentCircle.code, 'Invite code copied!')}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="copy-outline" size={ComponentSizes.icon.small} color={Colors.primary} />
+                    <Text style={styles.spaceActionText}>Copy</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.spaceActionButton} 
+                    onPress={() => shareSpace(currentCircle)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="share-outline" size={ComponentSizes.icon.small} color={Colors.primary} />
+                    <Text style={styles.spaceActionText}>Share</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.spaceActionButton} 
+                    onPress={handleGenerateNewCode}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="refresh-outline" size={ComponentSizes.icon.small} color={Colors.primary} />
+                    <Text style={styles.spaceActionText}>New Code</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+              
+              {activityFeed.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Ionicons name="chatbubbles-outline" size={ComponentSizes.icon.xlarge} color={Colors.textSecondary} />
+                  <Text style={styles.emptyTitle}>No Activity Yet</Text>
+                  <Text style={styles.emptyDescription}>
+                    Start creating sidequests in "{currentCircle.name}" to see activity here!
+                  </Text>
+                </View>
+              ) : (
+                <FlatList
+                  data={activityFeed}
+                  renderItem={renderActivityItem}
+                  keyExtractor={(item) => item.id}
+                  contentContainerStyle={styles.listContent}
+                  refreshControl={
+                    <RefreshControl refreshing={isLoading} onRefresh={onRefresh} />
+                  }
+                />
+              )}
+            </>
           )}
         </View>
       )}
@@ -696,5 +842,46 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: Spacing.md,
     marginTop: Spacing.lg,
+  },
+  currentSpaceBar: {
+    backgroundColor: Colors.white,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  currentSpaceInfo: {
+    flex: 1,
+  },
+  currentSpaceName: {
+    fontSize: Typography.fontSize.lg,
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.textPrimary,
+    marginBottom: Spacing.xs,
+  },
+  currentSpaceCode: {
+    fontSize: Typography.fontSize.sm,
+    color: Colors.textSecondary,
+  },
+  currentSpaceActions: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+  },
+  spaceActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.sm,
+    backgroundColor: Colors.primaryLight,
+  },
+  spaceActionText: {
+    fontSize: Typography.fontSize.xs,
+    fontWeight: Typography.fontWeight.medium,
+    color: Colors.primary,
   },
 }); 

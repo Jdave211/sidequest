@@ -18,7 +18,7 @@ export default function Index() {
     if (isMounted && !authState.isLoading) {
       // Add a small delay to ensure the layout is fully mounted
       const timer = setTimeout(() => {
-        console.log('🔍 Navigation check:', {
+        console.log('Navigation check:', {
           isLoading: authState.isLoading,
           hasUser: !!authState.user,
           userEmail: authState.user?.email,
@@ -28,25 +28,25 @@ export default function Index() {
           isOnboardingComplete: isOnboardingComplete()
         });
 
-        // 🔐 AUTHENTICATION GUARD: Only allow access if user is actually signed in
+        // AUTHENTICATION GUARD: Only allow access if user is actually signed in
         if (!authState.user || !authState.onboardingState.isSignedIn) {
-          console.log('🚫 User not authenticated, redirecting to welcome');
+          console.log('User not authenticated, redirecting to welcome');
           router.replace('/welcome');
           return;
         }
 
-        // ✅ User is authenticated, check onboarding state
+        // User is authenticated, check onboarding state
         if (isOnboardingComplete()) {
-          console.log('✅ User fully onboarded, navigating to main app');
+          console.log('User fully onboarded, navigating to main app');
           router.replace('/(tabs)/social');
         } else if (!authState.onboardingState.hasCompletedWelcome) {
-          console.log('📝 User needs to complete welcome');
+          console.log('User needs to complete welcome');
           router.replace('/welcome');
         } else if (!authState.onboardingState.hasCompletedProfile) {
-          console.log('👤 User needs to complete profile setup');
+          console.log('User needs to complete profile setup');
           router.replace('/profile-setup');
         } else {
-          console.log('✅ Fallback navigation to main app');
+          console.log('Fallback navigation to main app');
           router.replace('/(tabs)/social');
         }
       }, 100);
