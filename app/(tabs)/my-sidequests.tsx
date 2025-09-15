@@ -157,13 +157,22 @@ export default function MySidequests() {
                 </View>
               </View>
             </View>
-            <TouchableOpacity
-              onPress={() => handleDelete(item.id, item.title)}
-              style={styles.deleteButton}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Ionicons name="heart-outline" size={ComponentSizes.icon.medium} color={Colors.textSecondary} />
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
+              <TouchableOpacity
+                onPress={() => router.push({ pathname: '/space/add-sidequest', params: { title: item.title } } as any)}
+                style={styles.addToSpaceButton}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="add-circle-outline" size={ComponentSizes.icon.medium} color={Colors.primary} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => handleDelete(item.id, item.title)}
+                style={styles.deleteButton}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="trash-outline" size={ComponentSizes.icon.medium} color={Colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
           </View>
           
           <Text style={styles.cardDescription} numberOfLines={3}>

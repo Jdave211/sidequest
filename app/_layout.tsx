@@ -34,6 +34,8 @@ export default function RootLayout() {
       <Stack.Screen name="settings" options={{ title: "Settings", presentation: "modal", headerShown: false }} />
       <Stack.Screen name="space/join" options={{ title: "Join Space", headerShown: false }} />
       <Stack.Screen name="space/create" options={{ title: "Create Space", headerShown: false }} />
+      <Stack.Screen name="space/add-sidequest" options={{ title: "Add to Space", headerShown: false }} />
+      <Stack.Screen name="space/[id]" options={{ title: "Space", headerShown: false }} />
     </Stack>
   );
 }

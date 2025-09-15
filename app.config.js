@@ -8,7 +8,7 @@ export default {
     scheme: "sidequest",
     userInterfaceStyle: "automatic",
     splash: {
-      image: "./assets/images/splash-icon.png",
+      image: "./assets/images/icon.png",
       resizeMode: "contain",
       backgroundColor: "#ffffff"
     },

@@ -48,7 +48,9 @@ CREATE TABLE IF NOT EXISTS social_sidequests (
   due_date TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
-  completed_at TIMESTAMPTZ
+  completed_at TIMESTAMPTZ,
+  image_url TEXT,
+  review TEXT
 );
 
 -- ============================================================================
