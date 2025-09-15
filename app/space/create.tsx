@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { Alert, SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { BorderRadius, Colors, ComponentSizes, Shadows, Spacing, Typography } from '../../constants/theme';
+import { supabase } from '../../lib/supabase';
 import { useSocialStore, useUserStore } from '../../stores';
 
 export default function CreateSpace() {
@@ -50,6 +51,14 @@ export default function CreateSpace() {
           displayName: authState.user.displayName,
         },
         onboarding: authState.onboardingState,
+      });
+      
+      // Check Supabase client session
+      const { data: session } = await supabase.auth.getSession();
+      console.log('[CreateSpace] Supabase session check', {
+        hasSession: !!session.session,
+        userId: session.session?.user?.id,
+        sessionValid: session.session && !session.session.expires_at || new Date(session.session.expires_at * 1000) > new Date(),
       });
       const circle = await createCircle(name.trim(), description.trim() || undefined, authState.user.id);
       console.log('[CreateSpace] Success', { id: circle.id, code: circle.code, name: circle.name });

@@ -421,3 +421,13 @@ CREATE POLICY "Users can create activities for accessible sidequests" ON sideque
         )
     )
   );
+
+-- Additional non-recursive policy so creators can view their circles immediately after insert
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'friend_circles' AND policyname = 'Creators can view their circles'
+  ) THEN
+    CREATE POLICY "Creators can view their circles" ON friend_circles
+      FOR SELECT USING (created_by = auth.uid());
+  END IF;
+END $$;

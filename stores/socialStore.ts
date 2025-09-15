@@ -162,16 +162,27 @@ export const useSocialStore = create<SocialStore>((set, get) => ({
 
   // Create a new friend circle
   createCircle: async (name: string, description?: string, userId?: string): Promise<FriendCircle> => {
-    if (!userId) throw new Error('User ID is required');
     
     try {
       get().setLoading(true);
+      // Always resolve the user from the active Supabase session to ensure auth.uid() matches
+      const { data: authUserData, error: authUserError } = await supabase.auth.getUser();
+      if (authUserError) {
+        console.error('[SocialStore.createCircle] getUser error', authUserError);
+        throw authUserError;
+      }
+      const effectiveUserId = authUserData?.user?.id;
+      if (!effectiveUserId) {
+        throw new Error('Not signed in');
+      }
+
       const code = get().generateCircleCode();
       console.log('[SocialStore.createCircle] Input', {
         ts: new Date().toISOString(),
         name,
         description,
-        userId,
+        userIdParam: userId,
+        effectiveUserId,
         generatedCode: code,
       });
 
@@ -182,7 +193,7 @@ export const useSocialStore = create<SocialStore>((set, get) => ({
           name,
           code,
           description,
-          created_by: userId,
+          created_by: effectiveUserId,
         })
         .select()
         .single();
@@ -201,7 +212,7 @@ export const useSocialStore = create<SocialStore>((set, get) => ({
       console.log('[SocialStore.createCircle] Inserted circle', circle);
 
       // Reload user circles and set current circle
-      await get().loadUserCircles(userId);
+      await get().loadUserCircles(effectiveUserId);
       set({ currentCircle: circle });
       console.log('[SocialStore.createCircle] Current circle set and user circles reloaded');
       return circle;
