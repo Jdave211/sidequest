@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as AppleAuthentication from 'expo-apple-authentication';
+import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -16,8 +17,8 @@ import {
   View
 } from 'react-native';
 import { BorderRadius, Colors, ComponentSizes, Shadows, Spacing, Typography } from '../constants/theme';
-import { useUserStore } from '../stores';
 import { supabase } from '../lib/supabase';
+import { useUserStore } from '../stores';
 
 const { width, height } = Dimensions.get('window');
 
@@ -124,6 +125,23 @@ export default function Welcome() {
     router.push('/auth/email-signin');
   };
 
+  // Apple sign-in handler with Expo Go fallback (web OAuth)
+  const handleAppleSignIn = async () => {
+    try {
+      if ((Constants as any).appOwnership === 'expo') {
+        await supabase.auth.signInWithOAuth({
+          provider: 'apple',
+          options: { redirectTo: 'sidequest://auth/callback' },
+        });
+        return;
+      }
+      await useUserStore.getState().signInWithApple();
+    } catch (err) {
+      console.error('Apple sign-in error (fallback handler):', err);
+      Alert.alert('Sign In Error', 'Failed to sign in with Apple. Please try again.');
+    }
+  };
+
   console.log('[Welcome] Rendering welcome page');
 
   return (
@@ -154,11 +172,7 @@ export default function Welcome() {
                     buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
                     cornerRadius={8}
                     style={{ width: '100%', height: 50, marginBottom: Spacing.md }}
-                    onPress={async () => {
-                      try {
-                        await useUserStore.getState().signInWithApple();
-                      } catch {}
-                    }}
+                    onPress={handleAppleSignIn}
                   />
                 </Animated.View>
               ) : (
@@ -215,18 +229,19 @@ export default function Welcome() {
                 </Animated.View>
               ) : (
                 <Animated.View style={{ transform: [{ scale: buttonScale2 }] }}>
-                  <Text style={styles.appleCaption}>Continue with Apple</Text>
-                  <AppleAuthentication.AppleAuthenticationButton
-                    buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
-                    buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE_OUTLINE}
-                    cornerRadius={8}
-                    style={{ width: '100%', height: 50, marginTop: Spacing.sm }}
-                    onPress={async () => {
-                      try {
-                        await useUserStore.getState().signInWithApple();
-                      } catch {}
-                    }}
-                  />
+                  <TouchableOpacity
+                    style={[styles.authButton, styles.googleButton, isLoading && styles.authButtonDisabled]}
+                    onPress={handleAppleSignIn}
+                    disabled={isLoading}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons 
+                      name="logo-apple" 
+                      size={ComponentSizes.icon.medium} 
+                      color={Colors.textPrimary} 
+                    />
+                    <Text style={styles.googleButtonText}>Continue with Apple</Text>
+                  </TouchableOpacity>
                 </Animated.View>
               )}
             </View>
