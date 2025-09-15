@@ -17,6 +17,8 @@ interface UserStore {
   signInWithEmail: (email: string, password: string) => Promise<void>;
   signUpWithEmail: (email: string, password: string) => Promise<void>;
   signInWithMagicLink: (email: string) => Promise<void>;
+  signInWithOTP: (email: string) => Promise<void>;
+  verifyOTP: (email: string, token: string) => Promise<void>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<User>) => Promise<void>;
   completeWelcome: () => void;
@@ -479,6 +481,45 @@ export const useUserStore = create<UserStore>()(
     } catch (error: any) {
       console.error('Magic link error:', error);
       Alert.alert('Magic Link Error', error.message || 'Failed to send magic link.');
+      get().setLoading(false);
+      throw error;
+    }
+  },
+
+  // OTP Code-based authentication
+  signInWithOTP: async (email: string) => {
+    try {
+      get().setLoading(true);
+      const { data, error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          shouldCreateUser: true,
+        },
+      });
+      if (error) throw error;
+      console.log('OTP sent successfully to:', email);
+      get().setLoading(false);
+    } catch (error: any) {
+      console.error('OTP send error:', error);
+      get().setLoading(false);
+      throw error;
+    }
+  },
+
+  verifyOTP: async (email: string, token: string) => {
+    try {
+      get().setLoading(true);
+      const { data, error } = await supabase.auth.verifyOtp({
+        email,
+        token,
+        type: 'email',
+      });
+      if (error) throw error;
+      console.log('OTP verified successfully for:', email);
+      // The auth state change will be handled by the listener
+      get().setLoading(false);
+    } catch (error: any) {
+      console.error('OTP verification error:', error);
       get().setLoading(false);
       throw error;
     }

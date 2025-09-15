@@ -92,6 +92,19 @@ export const useSidequestStore = create<SidequestStore>((set, get) => ({
 
       if (error) throw error;
 
+      // Create an activity record for the new sidequest
+      try {
+        await supabase.from('sidequest_activities').insert({
+          sidequest_id: data.id,
+          user_id: userId,
+          activity_type: 'created' as const,
+          description: `Created "${data.title}"`,
+        });
+      } catch (activityError) {
+        // Non-fatal: log and continue
+        console.warn('[SidequestStore] Failed to create activity record:', activityError);
+      }
+
       // Reload user sidequests to get the updated list
       await get().loadUserSidequests(userId);
       console.log('[SidequestStore] Added new sidequest:', data.title);
@@ -141,6 +154,16 @@ export const useSidequestStore = create<SidequestStore>((set, get) => ({
   // Delete sidequest from Supabase
   deleteSidequest: async (id: string) => {
     try {
+      // First, get the sidequest details to know if it was shared in spaces
+      const { data: sidequestData, error: fetchError } = await supabase
+        .from('social_sidequests')
+        .select('circle_id, title')
+        .eq('id', id)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      // Delete the sidequest (this will cascade delete all related activities)
       const { error } = await supabase
         .from('social_sidequests')
         .delete()
@@ -152,7 +175,30 @@ export const useSidequestStore = create<SidequestStore>((set, get) => ({
       set((state) => ({
         sidequests: state.sidequests.filter(sidequest => sidequest.id !== id)
       }));
-      console.log('[SidequestStore] Deleted sidequest:', id);
+
+      // If this sidequest was shared in a space, refresh the social store
+      if (sidequestData?.circle_id) {
+        try {
+          const { useSocialStore } = await import('./socialStore');
+          const socialStore = useSocialStore.getState();
+          
+          // Refresh the activity feed for the space
+          await socialStore.loadActivityFeed(sidequestData.circle_id);
+          
+          // Refresh the global activity feed
+          const userCircles = socialStore.userCircles;
+          if (userCircles.length > 0) {
+            const circleIds = userCircles.map(c => c.id);
+            await socialStore.loadGlobalActivityFeed(circleIds);
+          }
+          
+          console.log('[SidequestStore] Refreshed space activity feeds after deletion');
+        } catch (socialError) {
+          console.warn('[SidequestStore] Failed to refresh social feeds:', socialError);
+        }
+      }
+
+      console.log('[SidequestStore] Deleted sidequest:', sidequestData?.title || id);
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to delete sidequest';
       get().setError(errorMsg);
