@@ -14,6 +14,20 @@ export default function CreateSpace() {
   const [description, setDescription] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const formatError = (err: any): { title: string; message: string } => {
+    try {
+      const code = err?.code || err?.status || err?.name;
+      const msg = err?.message || err?.error_description || 'Unknown error';
+      const details = err?.details || err?.hint || err?.body || '';
+      const composed = [msg, code ? `Code: ${code}` : null, details ? `Details: ${typeof details === 'string' ? details : JSON.stringify(details)}` : null]
+        .filter(Boolean)
+        .join('\n');
+      return { title: 'Failed to create space', message: composed };
+    } catch (_) {
+      return { title: 'Failed to create space', message: 'An unexpected error occurred.' };
+    }
+  };
+
   const onCreate = async () => {
     if (!name.trim()) {
       Alert.alert('Missing name', 'Please enter a space name.');
@@ -27,14 +41,37 @@ export default function CreateSpace() {
 
     try {
       setIsSubmitting(true);
-      console.log('[CreateSpace] Creating circle with', { name: name.trim(), description: description.trim() });
+      console.log('[CreateSpace] Start', {
+        ts: new Date().toISOString(),
+        payload: { name: name.trim(), description: description.trim() },
+        user: {
+          id: authState.user.id,
+          email: authState.user.email,
+          displayName: authState.user.displayName,
+        },
+        onboarding: authState.onboardingState,
+      });
       const circle = await createCircle(name.trim(), description.trim() || undefined, authState.user.id);
-      console.log('[CreateSpace] Circle created', { id: circle.id, code: circle.code });
+      console.log('[CreateSpace] Success', { id: circle.id, code: circle.code, name: circle.name });
       Alert.alert('Space Created', `"${circle.name}" is ready!\n\nInvite code: ${circle.code}`);
       router.replace('/(tabs)/social');
     } catch (e: any) {
-      console.error('[CreateSpace] Failed to create circle:', e?.message || e);
-      Alert.alert('Error', e?.message || 'Failed to create space.');
+      // Log full error object (best-effort) and surface rich details
+      try {
+        console.error('[CreateSpace] Error object:', e);
+        if (e?.code || e?.message || e?.details || e?.hint) {
+          console.error('[CreateSpace] Error details:', {
+            code: e?.code,
+            message: e?.message,
+            details: e?.details,
+            hint: e?.hint,
+            status: e?.status,
+            name: e?.name,
+          });
+        }
+      } catch {}
+      const fe = formatError(e);
+      Alert.alert(fe.title, fe.message);
     } finally {
       setIsSubmitting(false);
     }

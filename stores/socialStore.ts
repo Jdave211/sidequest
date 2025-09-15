@@ -167,6 +167,13 @@ export const useSocialStore = create<SocialStore>((set, get) => ({
     try {
       get().setLoading(true);
       const code = get().generateCircleCode();
+      console.log('[SocialStore.createCircle] Input', {
+        ts: new Date().toISOString(),
+        name,
+        description,
+        userId,
+        generatedCode: code,
+      });
 
       // Create the circle
       const { data: circle, error: circleError } = await supabase
@@ -180,13 +187,28 @@ export const useSocialStore = create<SocialStore>((set, get) => ({
         .select()
         .single();
 
-      if (circleError) throw circleError;
+      if (circleError) {
+        console.error('[SocialStore.createCircle] Supabase insert error', {
+          code: (circleError as any)?.code,
+          message: circleError.message,
+          details: (circleError as any)?.details,
+          hint: (circleError as any)?.hint,
+          status: (circleError as any)?.status,
+        });
+        throw circleError;
+      }
+
+      console.log('[SocialStore.createCircle] Inserted circle', circle);
 
       // Reload user circles and set current circle
       await get().loadUserCircles(userId);
       set({ currentCircle: circle });
+      console.log('[SocialStore.createCircle] Current circle set and user circles reloaded');
       return circle;
     } catch (err) {
+      try {
+        console.error('[SocialStore.createCircle] Caught error', err);
+      } catch {}
       get().setError(err instanceof Error ? err.message : 'Failed to create circle');
       throw err;
     } finally {
