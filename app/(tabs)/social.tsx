@@ -18,6 +18,7 @@ export default function Social() {
   const authState = useUserStore((state) => state.authState);
   const userCircles = useSocialStore((state) => state.userCircles);
   const loadActivityFeed = useSocialStore((state) => state.loadActivityFeed);
+  const loadGlobalActivityFeed = useSocialStore((state) => state.loadGlobalActivityFeed);
   const loadUserCircles = useSocialStore((state) => state.loadUserCircles);
   
   const [activeTab, setActiveTab] = useState<SocialTab>('feed');
@@ -31,18 +32,17 @@ export default function Social() {
 
   // Load global activity feed from all user's spaces
   useEffect(() => {
-    if (authState.user && userCircles.length > 0) {
-      // Load activities from all circles the user is in
-      Promise.all(userCircles.map(circle => loadActivityFeed(circle.id)));
+    if (authState.user) {
+      const ids = userCircles.map(c => c.id);
+      loadGlobalActivityFeed(ids);
     }
-  }, [authState.user, userCircles, loadActivityFeed]);
+  }, [authState.user, userCircles, loadGlobalActivityFeed]);
 
   const onRefresh = () => {
     if (authState.user) {
       loadUserCircles(authState.user.id);
-      if (userCircles.length > 0) {
-        Promise.all(userCircles.map(circle => loadActivityFeed(circle.id)));
-      }
+      const ids = userCircles.map(c => c.id);
+      loadGlobalActivityFeed(ids);
     }
   };
 
@@ -63,8 +63,10 @@ export default function Social() {
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>{activeTab === 'feed' ? 'Activity' : 'Manage Spaces'}</Text>
+      <View style={[styles.header, activeTab === 'spaces' && styles.spacesHeader]}>
+        <Text style={[styles.headerTitle, activeTab === 'spaces' && styles.spacesHeaderTitle]}>
+          {activeTab === 'feed' ? 'Activity' : 'Manage Spaces'}
+        </Text>
       </View>
 
       {/* Tab Navigation */}
@@ -99,11 +101,13 @@ export default function Social() {
       </View>
 
       {/* Content */}
-      {activeTab === 'spaces' ? (
-        <MySpaces onRefresh={onRefresh} />
-      ) : (
-        <ActivityFeed onRefresh={onRefresh} />
-      )}
+      <View style={[styles.contentContainer, activeTab === 'spaces' && styles.spacesBackground]}>
+        {activeTab === 'spaces' ? (
+          <MySpaces onRefresh={onRefresh} />
+        ) : (
+          <ActivityFeed onRefresh={onRefresh} />
+        )}
+      </View>
     </SafeAreaView>
   );
 }
@@ -154,6 +158,18 @@ const styles = StyleSheet.create({
   },
   activeTabText: {
     color: Colors.primary,
+  },
+  contentContainer: {
+    flex: 1,
+  },
+  spacesBackground: {
+    backgroundColor: '#F8F9FA', // Light gray background for spaces
+  },
+  spacesHeader: {
+    backgroundColor: 'black',
+  },
+  spacesHeaderTitle: {
+    color: Colors.white,
   },
   emptyState: {
     flex: 1,

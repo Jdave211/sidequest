@@ -65,7 +65,6 @@ export default function AddSpaceSidequest() {
         created_by: authState.user.id,
         circle_id: currentCircle.id,
         visibility: 'circle',
-        image_url: imageUrl,
         review: review.trim() || undefined,
         category: 'other',
         difficulty: 'easy',

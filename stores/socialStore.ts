@@ -96,6 +96,7 @@ interface SocialStore {
 
   // Activity Feed
   loadActivityFeed: (circleId: string) => Promise<void>;
+  loadGlobalActivityFeed: (circleIds: string[]) => Promise<void>;
 
   // Utility
   generateCircleCode: () => string;
@@ -149,7 +150,10 @@ export const useSocialStore = create<SocialStore>((set, get) => ({
         .eq('user_id', userId)
         .eq('is_active', true);
 
-      if (error) throw error;
+      if (error) {
+        console.warn('[loadActivityFeed] error', error);
+        throw error;
+      }
 
       const circles = (data || []).map((item: any) => item.friend_circles).filter(Boolean) as FriendCircle[];
       set({ userCircles: circles });
@@ -290,7 +294,10 @@ export const useSocialStore = create<SocialStore>((set, get) => ({
         .eq('circle_id', circleId)
         .eq('user_id', userId);
 
-      if (error) throw error;
+      if (error) {
+        console.warn('[loadGlobalActivityFeed] error', error);
+        throw error;
+      }
 
       const { currentCircle } = get();
       if (currentCircle?.id === circleId) {
@@ -384,9 +391,27 @@ export const useSocialStore = create<SocialStore>((set, get) => ({
 
       if (error) throw error;
 
-      // Reload sidequests
+      // Create an activity record for the new sidequest
+      try {
+        await supabase.from('sidequest_activities').insert({
+          sidequest_id: data.id,
+          user_id: sidequest.created_by,
+          activity_type: 'created' as const,
+          description: data.title ? `Created "${data.title}"` : null,
+        });
+      } catch (e) {
+        // Non-fatal: log and continue
+        console.warn('[SocialStore.createSocialSidequest] activity insert failed', e);
+      }
+
+      // Note: Personal sidequests now load directly from database, no need to sync
+
+      // Reload sidequests and activity feed for the circle
       if (sidequest.circle_id) {
-        await get().loadCircleSidequests(sidequest.circle_id);
+        await Promise.all([
+          get().loadCircleSidequests(sidequest.circle_id),
+          get().loadActivityFeed(sidequest.circle_id),
+        ]);
       }
 
       return data;
@@ -425,25 +450,103 @@ export const useSocialStore = create<SocialStore>((set, get) => ({
   // Load activity feed
   loadActivityFeed: async (circleId: string): Promise<void> => {
     try {
-      const { data, error } = await supabase
-        .from('sidequest_activities')
-        .select(`
-          *,
-          users (
-            display_name,
-            avatar_url
-          ),
-          social_sidequests (
-            title,
-            category
-          )
-        `)
+      // Load sidequests first
+      const { data: sq, error: sqError } = await supabase
+        .from('social_sidequests')
+        .select('id, created_at, created_by, title, category')
         .eq('circle_id', circleId)
         .order('created_at', { ascending: false })
         .limit(50);
 
-      if (error) throw error;
-      set({ activityFeed: data || [] });
+      if (sqError) {
+        console.warn('[loadActivityFeed] sidequests error', sqError);
+        throw sqError;
+      }
+
+      // Load user data separately
+      const userIds = [...new Set((sq || []).map(s => s.created_by))];
+      const { data: users, error: usersError } = await supabase
+        .from('users')
+        .select('id, display_name, avatar_url')
+        .in('id', userIds);
+
+      if (usersError) {
+        console.warn('[loadActivityFeed] users error', usersError);
+      }
+
+      // Create user lookup map
+      const userMap = (users || []).reduce((acc, user) => {
+        acc[user.id] = user;
+        return acc;
+      }, {} as any);
+
+      const activities = (sq || []).map((s: any) => ({
+        id: `synth-${s.id}`,
+        sidequest_id: s.id,
+        user_id: s.created_by,
+        activity_type: 'created' as const,
+        created_at: s.created_at,
+        user: userMap[s.created_by] || { display_name: 'Unknown User', avatar_url: null },
+        sidequest: { title: s.title, category: s.category },
+      }));
+
+      console.log(`[loadActivityFeed] Loaded ${activities.length} activities for circle ${circleId}`);
+      set({ activityFeed: activities });
+    } catch (err) {
+      get().setError(err instanceof Error ? err.message : 'Failed to load activity feed');
+    }
+  },
+
+  // Load activity feed across multiple circles
+  loadGlobalActivityFeed: async (circleIds: string[]): Promise<void> => {
+    try {
+      if (!circleIds || circleIds.length === 0) {
+        set({ activityFeed: [] });
+        return;
+      }
+      // Load sidequests first
+      const { data: sq, error: sqError } = await supabase
+        .from('social_sidequests')
+        .select('id, created_at, created_by, title, category, circle_id')
+        .in('circle_id', circleIds)
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+      if (sqError) {
+        console.warn('[loadGlobalActivityFeed] sidequests error', sqError);
+        throw sqError;
+      }
+
+      // Load user data separately
+      const userIds = [...new Set((sq || []).map(s => s.created_by))];
+      const { data: users, error: usersError } = await supabase
+        .from('users')
+        .select('id, display_name, avatar_url')
+        .in('id', userIds);
+
+      if (usersError) {
+        console.warn('[loadGlobalActivityFeed] users error', usersError);
+      }
+
+      // Create user lookup map
+      const userMap = (users || []).reduce((acc, user) => {
+        acc[user.id] = user;
+        return acc;
+      }, {} as any);
+
+      const activities = (sq || []).map((s: any) => ({
+        id: `synth-${s.id}`,
+        sidequest_id: s.id,
+        user_id: s.created_by,
+        activity_type: 'created' as const,
+        created_at: s.created_at,
+        circle_id: s.circle_id,
+        user: userMap[s.created_by] || { display_name: 'Unknown User', avatar_url: null },
+        sidequest: { title: s.title, category: s.category },
+      }));
+
+      console.log(`[loadGlobalActivityFeed] Loaded ${activities.length} activities for ${circleIds.length} circles`);
+      set({ activityFeed: activities });
     } catch (err) {
       get().setError(err instanceof Error ? err.message : 'Failed to load activity feed');
     }

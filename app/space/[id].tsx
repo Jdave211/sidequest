@@ -13,8 +13,10 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
-import { BorderRadius, Colors, ComponentSizes, Shadows, Spacing, Typography } from '../../constants/theme';
+import SidequestCard from '../../components/SidequestCard';
+import { BorderRadius, Colors, ComponentSizes, Spacing, Typography } from '../../constants/theme';
 import { useSocialStore, useUserStore } from '../../stores';
+
 
 export default function SpaceDetail() {
   const router = useRouter();
@@ -125,49 +127,13 @@ export default function SpaceDetail() {
     );
   };
 
-  const renderActivityItem = ({ item }: { item: any }) => (
-    <View style={styles.activityCard}>
-      <View style={styles.activityHeader}>
-        <View style={styles.activityUser}>
-          <View style={styles.activityAvatar}>
-            <Ionicons name="person" size={ComponentSizes.icon.medium} color={Colors.primary} />
-          </View>
-          <View>
-            <Text style={styles.activityUserName}>
-              {item.user?.display_name || 'Unknown User'}
-            </Text>
-            <Text style={styles.activityTime}>
-              {new Date(item.created_at).toLocaleDateString()}
-            </Text>
-          </View>
-        </View>
-        <View style={[styles.activityTypeBadge, { backgroundColor: getActivityColor(item.activity_type) }]}>
-          <Text style={styles.activityTypeText}>{item.activity_type}</Text>
-        </View>
-      </View>
-      <Text style={styles.activityDescription}>
-        {getActivityDescription(item)}
-      </Text>
-    </View>
-  );
-
-  const getActivityColor = (type: string) => {
-    switch (type) {
-      case 'completed': return Colors.success;
-      case 'started': return Colors.primary;
-      case 'created': return Colors.info;
-      default: return Colors.textSecondary;
-    }
-  };
-
-  const getActivityDescription = (item: any) => {
-    const sidequest = item.sidequest?.title || 'a sidequest';
-    switch (item.activity_type) {
-      case 'completed': return `Completed "${sidequest}"`;
-      case 'started': return `Started working on "${sidequest}"`;
-      case 'created': return `Created a new sidequest: "${sidequest}"`;
-      default: return `Updated "${sidequest}"`;
-    }
+  const renderActivityItem = ({ item }: { item: any }) => {
+    return (
+      <SidequestCard
+        item={item}
+        spaceName={currentSpace?.name || 'Space'}
+      />
+    );
   };
 
   const onRefresh = () => {
@@ -199,14 +165,14 @@ export default function SpaceDetail() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
-          <Ionicons name="chevron-back" size={ComponentSizes.icon.large} color={Colors.textPrimary} />
+          <Ionicons name="chevron-back" size={ComponentSizes.icon.large} color={Colors.white} />
         </TouchableOpacity>
         <View style={styles.headerInfo}>
           <Text style={styles.headerTitle}>{currentSpace.name}</Text>
           <Text style={styles.headerSubtitle}>Code: {currentSpace.code}</Text>
         </View>
         <TouchableOpacity onPress={handleLeaveSpace} style={styles.headerButton}>
-          <Ionicons name="exit-outline" size={ComponentSizes.icon.large} color={Colors.textSecondary} />
+          <Ionicons name="exit-outline" size={ComponentSizes.icon.large} color={Colors.white} />
         </TouchableOpacity>
       </View>
 
@@ -274,17 +240,17 @@ export default function SpaceDetail() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: '#F0F4FF', // Light blue background to distinguish from activity feed
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
+    paddingVertical: Spacing.lg,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
-    backgroundColor: Colors.white,
+    backgroundColor: Colors.primary, // Blue header for space identity
   },
   headerButton: {
     padding: Spacing.sm,
@@ -297,18 +263,19 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: Typography.fontSize.xl,
     fontWeight: Typography.fontWeight.bold,
-    color: Colors.textPrimary,
+    color: Colors.white, // White text on blue header
   },
   headerSubtitle: {
     fontSize: Typography.fontSize.sm,
-    color: Colors.textSecondary,
+    color: Colors.white, // White text on blue header
+    opacity: 0.8,
   },
   actionsBar: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.md,
-    backgroundColor: Colors.white,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)', // Semi-transparent white
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
     position: 'sticky',
@@ -331,58 +298,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: Spacing.lg,
-  },
-  activityCard: {
-    backgroundColor: Colors.white,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.lg,
-    marginBottom: Spacing.md,
-    ...Shadows.sm,
-  },
-  activityHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: Spacing.md,
-  },
-  activityUser: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  activityAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.primaryLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: Spacing.md,
-  },
-  activityUserName: {
-    fontSize: Typography.fontSize.base,
-    fontWeight: Typography.fontWeight.semibold,
-    color: Colors.textPrimary,
-  },
-  activityTime: {
-    fontSize: Typography.fontSize.sm,
-    color: Colors.textSecondary,
-  },
-  activityTypeBadge: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs,
-    borderRadius: BorderRadius.full,
-  },
-  activityTypeText: {
-    fontSize: Typography.fontSize.xs,
-    fontWeight: Typography.fontWeight.semibold,
-    color: Colors.white,
-    textTransform: 'capitalize',
-  },
-  activityDescription: {
-    fontSize: Typography.fontSize.base,
-    color: Colors.textPrimary,
-    lineHeight: Typography.lineHeight.base,
+    paddingBottom: 100,
   },
   emptyState: {
     flex: 1,
@@ -405,13 +321,15 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xl,
   },
   backButton: {
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.white,
+    borderWidth: 2,
+    borderColor: Colors.primary,
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.md,
     borderRadius: BorderRadius.md,
   },
   backButtonText: {
-    color: Colors.white,
+    color: Colors.primary,
     fontWeight: Typography.fontWeight.semibold,
   },
   fab: {

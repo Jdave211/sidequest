@@ -1,18 +1,16 @@
 import { Stack } from "expo-router";
 import { useEffect } from "react";
-import { useSidequestStore, useUserStore } from "../stores";
+import { useUserStore } from "../stores";
 
 export default function RootLayout() {
   const initializeAuth = useUserStore((state) => state.initializeAuth);
-  const initializeSampleData = useSidequestStore((state) => state.initializeSampleData);
 
   useEffect(() => {
-    // Initialize auth and sample data when app starts
+    // Initialize auth when app starts (no longer loading sample data)
     let cleanup: (() => void) | undefined;
     
     const initialize = async () => {
       cleanup = await initializeAuth();
-      initializeSampleData();
     };
     
     initialize();
@@ -20,7 +18,7 @@ export default function RootLayout() {
     return () => {
       if (cleanup) cleanup();
     };
-  }, [initializeAuth, initializeSampleData]);
+  }, [initializeAuth]);
 
   return (
     <Stack>

@@ -21,6 +21,8 @@ import { SidequestStatus } from '../../types/sidequest';
 
 export default function MySidequests() {
   const sidequests = useSidequestStore((state) => state.sidequests);
+  const isLoading = useSidequestStore((state) => state.isLoading);
+  const loadUserSidequests = useSidequestStore((state) => state.loadUserSidequests);
   const updateSidequest = useSidequestStore((state) => state.updateSidequest);
   const deleteSidequest = useSidequestStore((state) => state.deleteSidequest);
   const signOut = useUserStore((state) => state.signOut);
@@ -55,6 +57,13 @@ export default function MySidequests() {
     };
     loadPrefs();
   }, []);
+
+  // Load user's sidequests when user changes
+  useEffect(() => {
+    if (authUser?.id) {
+      loadUserSidequests(authUser.id);
+    }
+  }, [authUser?.id, loadUserSidequests]);
 
   const openSettings = () => {
     setDisplayNameInput(authUser?.displayName || '');
@@ -160,7 +169,7 @@ export default function MySidequests() {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
               <TouchableOpacity
                 onPress={() => router.push({ pathname: '/space/add-sidequest', params: { title: item.title } } as any)}
-                style={styles.addToSpaceButton}
+                style={styles.deleteButton}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <Ionicons name="add-circle-outline" size={ComponentSizes.icon.medium} color={Colors.primary} />
@@ -627,7 +636,7 @@ const styles = StyleSheet.create({
     ...Shadows.sm,
     gap: Spacing.md,
   },
-  sidebarSearchInput: {
+  searchInput: {
     flex: 1,
     color: Colors.textPrimary,
     fontSize: Typography.fontSize.base,
@@ -802,5 +811,32 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     ...Shadows.lg,
+  },
+  modalCard: {
+    backgroundColor: Colors.white,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.xl,
+    margin: Spacing.lg,
+    ...Shadows.lg,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.lg,
+  },
+  modalTitle: {
+    fontSize: Typography.fontSize.xl,
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.textPrimary,
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+  },
+  backText: {
+    fontSize: Typography.fontSize.base,
+    color: Colors.textPrimary,
   },
 }); 
