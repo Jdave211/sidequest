@@ -20,7 +20,7 @@ export default function Social() {
   const loadActivityFeed = useSocialStore((state) => state.loadActivityFeed);
   const loadUserCircles = useSocialStore((state) => state.loadUserCircles);
   
-  const [activeTab, setActiveTab] = useState<SocialTab>('spaces');
+  const [activeTab, setActiveTab] = useState<SocialTab>('feed');
 
   // Load user circles when user changes
   useEffect(() => {
@@ -64,25 +64,11 @@ export default function Social() {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Spaces</Text>
+        <Text style={styles.headerTitle}>{activeTab === 'feed' ? 'Activity' : 'Manage Spaces'}</Text>
       </View>
 
       {/* Tab Navigation */}
       <View style={styles.tabContainer}>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'spaces' && styles.activeTab]}
-          onPress={() => setActiveTab('spaces')}
-        >
-          <Ionicons 
-            name="home" 
-            size={ComponentSizes.icon.medium} 
-            color={activeTab === 'spaces' ? Colors.primary : Colors.textSecondary} 
-          />
-          <Text style={[styles.tabText, activeTab === 'spaces' && styles.activeTabText]}>
-            My Spaces
-          </Text>
-        </TouchableOpacity>
-        
         <TouchableOpacity
           style={[styles.tab, activeTab === 'feed' && styles.activeTab]}
           onPress={() => setActiveTab('feed')}
@@ -93,7 +79,21 @@ export default function Social() {
             color={activeTab === 'feed' ? Colors.primary : Colors.textSecondary} 
           />
           <Text style={[styles.tabText, activeTab === 'feed' && styles.activeTabText]}>
-            Activity Feed
+            Activity
+          </Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'spaces' && styles.activeTab]}
+          onPress={() => setActiveTab('spaces')}
+        >
+          <Ionicons 
+            name="home" 
+            size={ComponentSizes.icon.medium} 
+            color={activeTab === 'spaces' ? Colors.primary : Colors.textSecondary} 
+          />
+          <Text style={[styles.tabText, activeTab === 'spaces' && styles.activeTabText]}>
+            Manage Spaces
           </Text>
         </TouchableOpacity>
       </View>

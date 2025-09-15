@@ -6,6 +6,9 @@ import React, { useState } from 'react';
 import {
     Alert,
     FlatList,
+    Image,
+    Keyboard,
+    Pressable,
     RefreshControl,
     StyleSheet,
     Text,
@@ -15,6 +18,36 @@ import {
 } from 'react-native';
 import { BorderRadius, Colors, ComponentSizes, Shadows, Spacing, Typography } from '../constants/theme';
 import { useSocialStore, useUserStore } from '../stores';
+
+// Fallback images for spaces without a cover image
+const SPACE_STOCK_IMAGES = [
+  require('../assets/images/spaces_stock_images/beach1.jpg'),
+  require('../assets/images/spaces_stock_images/beach2.png'),
+  require('../assets/images/spaces_stock_images/ski1.png'),
+  require('../assets/images/spaces_stock_images/sky1.png'),
+  require('../assets/images/spaces_stock_images/sky2.png'),
+  require('../assets/images/spaces_stock_images/snow1.png'),
+  require('../assets/images/spaces_stock_images/snow2.png'),
+];
+
+function hashString(value: string): number {
+  let hash = 0;
+  for (let i = 0; i < value.length; i++) {
+    const char = value.charCodeAt(i);
+    hash = (hash << 5) - hash + char;
+    hash |= 0;
+  }
+  return Math.abs(hash);
+}
+
+function getCircleImageSource(circle: any) {
+  if (circle?.image_url) {
+    return { uri: circle.image_url } as const;
+  }
+  const key = circle?.id || circle?.code || circle?.name || String(Math.random());
+  const idx = hashString(String(key)) % SPACE_STOCK_IMAGES.length;
+  return SPACE_STOCK_IMAGES[idx];
+}
 
 interface MySpacesProps {
   onRefresh: () => void;
@@ -115,28 +148,30 @@ export default function MySpaces({ onRefresh }: MySpacesProps) {
   const renderCircleCard = ({ item }: { item: any }) => (
     <View style={[styles.circleCard, currentCircle?.id === item.id && styles.circleCardActive]}>
       <TouchableOpacity
-        style={styles.circleCardContent}
         onPress={() => { setCurrentCircle(item); router.push(`/space/${item.id}` as any); }}
-        activeOpacity={0.7}
+        activeOpacity={0.8}
       >
-        <View style={styles.circleHeader}>
-          <View style={styles.circleIcon}>
-            <Ionicons name="people" size={ComponentSizes.icon.large} color={Colors.primary} />
+        <Image source={getCircleImageSource(item)} style={styles.circleImage} resizeMode="cover" />
+        <View style={styles.circleCardContent}>
+          <View style={styles.circleHeader}>
+            <View style={styles.circleIcon}>
+              <Ionicons name="people" size={ComponentSizes.icon.large} color={Colors.primary} />
+            </View>
+            <View style={styles.circleInfo}>
+              <Text style={styles.circleName} numberOfLines={1}>{item.name}</Text>
+              <Text style={styles.circleCode}>Code: {item.code}</Text>
+              {item.description && (
+                <Text style={styles.circleDescription} numberOfLines={2}>
+                  {item.description}
+                </Text>
+              )}
+            </View>
           </View>
-          <View style={styles.circleInfo}>
-            <Text style={styles.circleName} numberOfLines={1}>{item.name}</Text>
-            <Text style={styles.circleCode}>Code: {item.code}</Text>
-            {item.description && (
-              <Text style={styles.circleDescription} numberOfLines={2}>
-                {item.description}
-              </Text>
-            )}
-          </View>
-        </View>
-        <View style={styles.circleStats}>
-          <View style={styles.statItem}>
-            <Ionicons name="people-outline" size={ComponentSizes.icon.small} color={Colors.textSecondary} />
-            <Text style={styles.statText}>{item.member_count || 0}</Text>
+          <View style={styles.circleStats}>
+            <View style={styles.statItem}>
+              <Ionicons name="people-outline" size={ComponentSizes.icon.small} color={Colors.textSecondary} />
+              <Text style={styles.statText}>{Math.max(1, item.member_count || 0)}</Text>
+            </View>
           </View>
         </View>
       </TouchableOpacity>
@@ -172,21 +207,28 @@ export default function MySpaces({ onRefresh }: MySpacesProps) {
   );
 
   return (
-    <View style={styles.container}>
-      {/* Airbnb-inspired Header */}
+    <Pressable
+      style={styles.container}
+      onPress={() => {
+        if (searchExpanded) {
+          setSearchExpanded(false);
+          Keyboard.dismiss();
+        }
+      }}
+    >
+      {/* Header: centered search + balanced action pills */}
       <View style={styles.header}>
         {/* Search Bar */}
         <View style={styles.searchContainer}>
-          <TouchableOpacity
+          <Pressable
             style={[styles.searchBar, searchExpanded && styles.searchBarExpanded]}
-            onPress={() => setSearchExpanded(true)}
-            activeOpacity={0.8}
+            onPress={(e) => { e.stopPropagation(); setSearchExpanded(true); }}
           >
             <Ionicons name="search" size={20} color={Colors.textSecondary} />
             {searchExpanded ? (
               <TextInput
                 style={styles.searchInput}
-                placeholder="Find your spaces"
+                placeholder="Search spaces"
                 placeholderTextColor={Colors.textSecondary}
                 autoFocus
                 onBlur={() => setSearchExpanded(false)}
@@ -194,34 +236,27 @@ export default function MySpaces({ onRefresh }: MySpacesProps) {
             ) : (
               <Text style={styles.searchPlaceholder}>Search</Text>
             )}
-          </TouchableOpacity>
+          </Pressable>
         </View>
 
-        {/* Category Tabs */}
-        <View style={styles.categoryTabs}>
+        {/* Balanced actions */}
+        <View style={styles.headerActionsRow}>
           <TouchableOpacity
-            style={[styles.categoryTab, styles.activeTab]}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="home" size={24} color={Colors.textPrimary} />
-          </TouchableOpacity>
-          
-          <TouchableOpacity
-            style={styles.categoryTab}
+            style={[styles.headerPill, styles.headerPillLeft]}
             onPress={() => setShowJoinForm(true)}
-            activeOpacity={0.7}
+            activeOpacity={0.8}
           >
-            <Ionicons name="add-circle-outline" size={20} color={Colors.textSecondary} />
-            <Text style={styles.categoryTabText}>Join</Text>
+            <Ionicons name="enter-outline" size={18} color={Colors.textPrimary} />
+            <Text style={styles.headerPillText}>Join Space</Text>
           </TouchableOpacity>
-          
+          <View style={styles.headerActionsSpacer} />
           <TouchableOpacity
-            style={styles.categoryTab}
+            style={[styles.headerPill, styles.headerPillRight]}
             onPress={() => setShowCreateForm(true)}
-            activeOpacity={0.7}
+            activeOpacity={0.8}
           >
-            <Ionicons name="create-outline" size={20} color={Colors.textSecondary} />
-            <Text style={styles.categoryTabText}>Create</Text>
+            <Ionicons name="add-circle-outline" size={18} color={Colors.textPrimary} />
+            <Text style={styles.headerPillText}>Create Space</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -346,7 +381,7 @@ export default function MySpaces({ onRefresh }: MySpacesProps) {
           </View>
         </View>
       )}
-    </View>
+    </Pressable>
   );
 }
 
@@ -398,6 +433,35 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     gap: Spacing.xl,
   },
+  headerActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.md,
+    gap: Spacing.md,
+  },
+  headerActionsSpacer: {
+    flex: 1,
+  },
+  headerPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexBasis: '48%',
+    gap: Spacing.xs,
+    backgroundColor: Colors.primaryLight,
+    borderRadius: 999,
+    paddingVertical: Spacing.sm,
+  },
+  headerPillLeft: {
+  },
+  headerPillRight: {
+  },
+  headerPillText: {
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.semibold,
+    color: Colors.primary,
+  },
   categoryTab: {
     alignItems: 'center',
     paddingVertical: Spacing.md,
@@ -425,6 +489,12 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.lg,
     marginBottom: Spacing.md,
     ...Shadows.md,
+  },
+  circleImage: {
+    width: '100%',
+    height: 140,
+    borderTopLeftRadius: BorderRadius.lg,
+    borderTopRightRadius: BorderRadius.lg,
   },
   circleCardActive: {
     borderWidth: 2,
