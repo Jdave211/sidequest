@@ -7,9 +7,9 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { BorderRadius, Colors, ComponentSizes, Spacing, Typography } from '../../constants/theme';
 import ActivityFeed from '../../components/ActivityFeed';
 import MySpaces from '../../components/MySpaces';
+import { Colors, ComponentSizes, Spacing, Typography } from '../../constants/theme';
 import { useSocialStore, useUserStore } from '../../stores';
 
 type SocialTab = 'spaces' | 'feed';

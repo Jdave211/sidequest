@@ -4,14 +4,14 @@ import { useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import React, { useState } from 'react';
 import {
-  Alert,
-  FlatList,
-  RefreshControl,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    Alert,
+    FlatList,
+    RefreshControl,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { BorderRadius, Colors, ComponentSizes, Shadows, Spacing, Typography } from '../constants/theme';
 import { useSocialStore, useUserStore } from '../stores';
@@ -36,6 +36,7 @@ export default function MySpaces({ onRefresh }: MySpacesProps) {
   const [joinCode, setJoinCode] = useState('');
   const [circleName, setCircleName] = useState('');
   const [circleDescription, setCircleDescription] = useState('');
+  const [searchExpanded, setSearchExpanded] = useState(false);
 
   const copyToClipboard = async (text: string, message: string) => {
     try {
@@ -172,24 +173,57 @@ export default function MySpaces({ onRefresh }: MySpacesProps) {
 
   return (
     <View style={styles.container}>
-      {/* Header Actions */}
+      {/* Airbnb-inspired Header */}
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.headerButton}
-          onPress={() => setShowJoinForm(true)}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="add-circle-outline" size={ComponentSizes.icon.medium} color={Colors.primary} />
-          <Text style={styles.headerButtonText}>Join Space</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.headerButton}
-          onPress={() => setShowCreateForm(true)}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="create-outline" size={ComponentSizes.icon.medium} color={Colors.primary} />
-          <Text style={styles.headerButtonText}>Create Space</Text>
-        </TouchableOpacity>
+        {/* Search Bar */}
+        <View style={styles.searchContainer}>
+          <TouchableOpacity
+            style={[styles.searchBar, searchExpanded && styles.searchBarExpanded]}
+            onPress={() => setSearchExpanded(true)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="search" size={20} color={Colors.textSecondary} />
+            {searchExpanded ? (
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Find your spaces"
+                placeholderTextColor={Colors.textSecondary}
+                autoFocus
+                onBlur={() => setSearchExpanded(false)}
+              />
+            ) : (
+              <Text style={styles.searchPlaceholder}>Search</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        {/* Category Tabs */}
+        <View style={styles.categoryTabs}>
+          <TouchableOpacity
+            style={[styles.categoryTab, styles.activeTab]}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="home" size={24} color={Colors.textPrimary} />
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={styles.categoryTab}
+            onPress={() => setShowJoinForm(true)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="add-circle-outline" size={20} color={Colors.textSecondary} />
+            <Text style={styles.categoryTabText}>Join</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={styles.categoryTab}
+            onPress={() => setShowCreateForm(true)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="create-outline" size={20} color={Colors.textSecondary} />
+            <Text style={styles.categoryTabText}>Create</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Content */}
@@ -321,29 +355,67 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
     backgroundColor: Colors.white,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: '#E5E5E5',
   },
-  headerButton: {
+  searchContainer: {
+    paddingHorizontal: Spacing.lg,
+    marginBottom: Spacing.lg,
+  },
+  searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#F7F7F7',
+    borderRadius: 25,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
     gap: Spacing.sm,
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
-    backgroundColor: Colors.primaryLight,
-    flex: 1,
-    marginHorizontal: Spacing.sm,
-    justifyContent: 'center',
+    ...Shadows.sm,
+    width: 120,
+    alignSelf: 'center',
   },
-  headerButtonText: {
+  searchBarExpanded: {
+    width: '100%',
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+  },
+  searchPlaceholder: {
     fontSize: Typography.fontSize.sm,
+    color: Colors.textSecondary,
+    fontWeight: Typography.fontWeight.medium,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: Typography.fontSize.base,
+    color: Colors.textPrimary,
+    fontWeight: Typography.fontWeight.medium,
+  },
+  categoryTabs: {
+    flexDirection: 'row',
+    paddingHorizontal: Spacing.lg,
+    gap: Spacing.xl,
+  },
+  categoryTab: {
+    alignItems: 'center',
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.sm,
+  },
+  activeTab: {
+    borderBottomWidth: 3,
+    borderBottomColor: Colors.textPrimary,
+  },
+  categoryTabText: {
+    fontSize: Typography.fontSize.sm,
+    color: Colors.textSecondary,
+    fontWeight: Typography.fontWeight.medium,
+  },
+  activeTabText: {
+    fontSize: Typography.fontSize.sm,
+    color: Colors.textPrimary,
     fontWeight: Typography.fontWeight.semibold,
-    color: Colors.primary,
   },
   listContent: {
     padding: Spacing.lg,
