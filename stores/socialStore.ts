@@ -117,14 +117,21 @@ export const useSocialStore = create<SocialStore>((set, get) => ({
   setLoading: (isLoading: boolean) => set({ isLoading }),
   setError: (error: string | null) => set({ error }),
 
-  // Generate a unique 6-character code
+  // Generate a unique 6-character code with better distribution
   generateCircleCode: (): string => {
+    // Use timestamp-based prefix for better distribution and collision avoidance
+    const now = Date.now();
+    const timeComponent = now.toString(36).slice(-2).toUpperCase(); // Last 2 chars of timestamp in base36
+    
+    // High-entropy random component
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let result = '';
-    for (let i = 0; i < 6; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    let randomComponent = '';
+    for (let i = 0; i < 4; i++) {
+      randomComponent += chars.charAt(Math.floor(Math.random() * chars.length));
     }
-    return result;
+    
+    // Combine: 2 chars time + 4 chars random = 6 chars total
+    return timeComponent + randomComponent;
   },
 
   // Load user's circles
@@ -144,7 +151,8 @@ export const useSocialStore = create<SocialStore>((set, get) => ({
             created_at,
             updated_at,
             is_active,
-            max_members
+            max_members,
+            member_count
           )
         `)
         .eq('user_id', userId)
@@ -180,7 +188,40 @@ export const useSocialStore = create<SocialStore>((set, get) => ({
         throw new Error('Not signed in');
       }
 
-      const code = get().generateCircleCode();
+      // Generate unique code with collision detection
+      let code: string;
+      let attempts = 0;
+      const maxAttempts = 10;
+      
+      do {
+        code = get().generateCircleCode();
+        attempts++;
+        
+        // Check if code already exists
+        const { data: existingCircle, error: checkError } = await supabase
+          .from('friend_circles')
+          .select('id')
+          .eq('code', code)
+          .eq('is_active', true)
+          .single();
+        
+        // If no circle found (PGRST116) or no error, code is unique
+        if (checkError?.code === 'PGRST116' || !existingCircle) {
+          break; // Code is unique
+        }
+        
+        // If there's a different error, throw it
+        if (checkError) {
+          throw checkError;
+        }
+        
+        if (attempts >= maxAttempts) {
+          throw new Error('Failed to generate unique circle code. Please try again.');
+        }
+        
+        console.log(`[SocialStore.createCircle] Code collision detected (${code}), regenerating... (attempt ${attempts})`);
+      } while (attempts < maxAttempts);
+      
       console.log('[SocialStore.createCircle] Input', {
         ts: new Date().toISOString(),
         name,
@@ -188,6 +229,7 @@ export const useSocialStore = create<SocialStore>((set, get) => ({
         userIdParam: userId,
         effectiveUserId,
         generatedCode: code,
+        attempts,
       });
 
       // Create the circle
@@ -231,22 +273,36 @@ export const useSocialStore = create<SocialStore>((set, get) => ({
     }
   },
 
-  // Join a circle with secret code
+  // Join a circle with secret code (optimized with indexed search)
   joinCircle: async (code: string, userId?: string): Promise<FriendCircle> => {
     if (!userId) throw new Error('User ID is required');
     
     try {
       get().setLoading(true);
+      
+      // Normalize and validate code format
+      const normalizedCode = code.trim().toUpperCase();
+      if (!/^[A-Z0-9]{6}$/.test(normalizedCode)) {
+        throw new Error('Invalid code format. Code must be 6 characters (letters and numbers only)');
+      }
 
-      // Find circle by code
-      const { data: circle, error: findError } = await supabase
-        .from('friend_circles')
-        .select('*')
-        .eq('code', code.toUpperCase())
-        .eq('is_active', true)
-        .single();
+      console.log(`[SocialStore.joinCircle] Searching for circle with code: ${normalizedCode}`);
 
-      if (findError || !circle) throw new Error('Invalid circle code');
+      // Find circle by code using secure function (prevents seeing all circles)
+      const { data: circleData, error: findError } = await supabase
+        .rpc('find_circle_by_code', { circle_code: normalizedCode });
+      
+      const circle = circleData?.[0]; // Function returns array, get first result
+
+      if (findError) {
+        console.log(`[SocialStore.joinCircle] Circle lookup error:`, findError);
+        if (findError.code === 'PGRST116') { // No rows returned
+          throw new Error('Invalid circle code');
+        }
+        throw findError;
+      }
+      
+      if (!circle) throw new Error('Invalid circle code');
 
       // Check if user is already a member
       const { data: existingMember } = await supabase

@@ -64,13 +64,21 @@ export default function MySpaces({ onRefresh }: MySpacesProps) {
   };
 
   const handleJoinCircle = async () => {
-    if (!joinCode.trim()) {
-      Alert.alert('Error', 'Please enter a valid circle code');
+    const code = joinCode.trim().toUpperCase();
+    
+    // Client-side validation
+    if (!code) {
+      Alert.alert('Error', 'Please enter a circle code');
+      return;
+    }
+    
+    if (!/^[A-Z0-9]{6}$/.test(code)) {
+      Alert.alert('Error', 'Circle code must be exactly 6 characters (letters and numbers only)');
       return;
     }
 
     try {
-      const joinedCircle = await joinCircle(joinCode.trim(), authState.user?.id);
+      const joinedCircle = await joinCircle(code, authState.user?.id);
       setJoinCode('');
       setShowJoinForm(false);
       Alert.alert('Joined Space', `Welcome to "${joinedCircle.name}"!`);

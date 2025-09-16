@@ -32,6 +32,7 @@ const backgroundImages = [
   require('../assets/images/welcome_bg6.png'),
   require('../assets/images/welcome_bg7.png'),
   require('../assets/images/welcome_bg8.png'),
+  require('../assets/images/welcome_bg9.png'),
 ];
 
 export default function Welcome() {
@@ -219,12 +220,22 @@ export default function Welcome() {
                     disabled={isLoading}
                     activeOpacity={0.8}
                   >
-                    <Ionicons 
-                      name="logo-google" 
-                      size={ComponentSizes.icon.medium} 
-                      color={Colors.textPrimary} 
-                    />
-                    <Text style={styles.googleButtonText}>Continue with Google</Text>
+                    {isLoading ? (
+                      <ActivityIndicator 
+                        size="small" 
+                        color={Colors.primary} 
+                        style={{ marginRight: Spacing.sm }}
+                      />
+                    ) : (
+                      <Ionicons 
+                        name="logo-google" 
+                        size={ComponentSizes.icon.medium} 
+                        color={Colors.textPrimary} 
+                      />
+                    )}
+                    <Text style={styles.googleButtonText}>
+                      {isLoading ? 'Signing In...' : 'Continue with Google'}
+                    </Text>
                   </TouchableOpacity>
                 </Animated.View>
               ) : (

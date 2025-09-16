@@ -54,7 +54,7 @@ export default function Social() {
           <Text style={styles.emptyTitle}>Sign In Required</Text>
           <Text style={styles.emptyDescription}>
             Please sign in to access social features and join friend circles.
-          </Text>
+        </Text>
         </View>
       </SafeAreaView>
     );
@@ -102,7 +102,7 @@ export default function Social() {
 
       {/* Content */}
       <View style={[styles.contentContainer, activeTab === 'spaces' && styles.spacesBackground]}>
-        {activeTab === 'spaces' ? (
+      {activeTab === 'spaces' ? (
           <MySpaces onRefresh={onRefresh} />
         ) : (
           <ActivityFeed onRefresh={onRefresh} />
@@ -191,4 +191,4 @@ const styles = StyleSheet.create({
     lineHeight: Typography.lineHeight.base,
     marginBottom: Spacing.xl,
   },
-});
+}); 
