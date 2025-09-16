@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { BorderRadius, Colors, ComponentSizes, Spacing, Typography } from '../constants/theme';
 import { supabase } from '../lib/supabase';
+import { useSidequestStore } from '../stores/sidequestStore';
 import { useSocialStore } from '../stores/socialStore';
 import { useUserStore } from '../stores/userStore';
 import SidequestCard from './SidequestCard';
@@ -29,6 +30,7 @@ export const SpaceDetail: React.FC<SpaceDetailProps> = ({ spaceId, onBack }) => 
   const router = useRouter();
   const { loadActivityFeed, loadUserCircles } = useSocialStore();
   const { authState } = useUserStore();
+  const { removeSidequestFromSpace } = useSidequestStore();
   
   const [currentSpace, setCurrentSpace] = useState<any>(null);
   const [activityFeed, setActivityFeed] = useState<any[]>([]);
@@ -206,11 +208,40 @@ export const SpaceDetail: React.FC<SpaceDetailProps> = ({ spaceId, onBack }) => 
     }
   };
 
+  const handleRemoveSidequest = async (sidequestId: string) => {
+    if (!currentSpace) return;
+    
+    Alert.alert(
+      'Remove from Space',
+      'Are you sure you want to remove this sidequest from this space? It will still remain in your personal sidequests.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await removeSidequestFromSpace(sidequestId, currentSpace.id);
+              // Refresh the activity feed
+              await loadSpaceData();
+            } catch (error) {
+              Alert.alert('Error', 'Failed to remove sidequest from space.');
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const renderActivityItem = ({ item }: { item: any }) => {
+    const isCreatedByUser = item.created_by === authState.user?.id;
+    
     return (
       <SidequestCard
         item={item}
         spaceName={currentSpace?.name || 'Space'}
+        showRemoveButton={isCreatedByUser} // Only show for user's own sidequests
+        onRemove={() => handleRemoveSidequest(item.id)}
       />
     );
   };

@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import {
     Image,
@@ -64,9 +65,11 @@ interface SidequestCardProps {
   item: any;
   spaceName?: string;
   onPress?: () => void;
+  onRemove?: () => void; // For removing from space
+  showRemoveButton?: boolean; // Whether to show the remove button
 }
 
-export default function SidequestCard({ item, spaceName, onPress }: SidequestCardProps) {
+export default function SidequestCard({ item, spaceName, onPress, onRemove, showRemoveButton = false }: SidequestCardProps) {
   const sidequestTitle = item.sidequest?.title || item.title || 'Untitled Sidequest';
   const displaySpaceName = spaceName || 'Unknown Space';
   
@@ -108,6 +111,21 @@ export default function SidequestCard({ item, spaceName, onPress }: SidequestCar
           <Text style={styles.descriptionText} numberOfLines={2}>
             {item.sidequest.description}
           </Text>
+        )}
+        
+        {/* Remove Button */}
+        {showRemoveButton && onRemove && (
+          <TouchableOpacity 
+            style={styles.removeButton}
+            onPress={(e) => {
+              e.stopPropagation(); // Prevent card onPress
+              onRemove();
+            }}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="trash-outline" size={20} color={Colors.error} />
+            <Text style={styles.removeButtonText}>Remove from Space</Text>
+          </TouchableOpacity>
         )}
       </View>
     </TouchableOpacity>
@@ -178,5 +196,17 @@ const styles = StyleSheet.create({
     fontSize: Typography.fontSize.sm,
     color: Colors.textSecondary,
     lineHeight: Typography.lineHeight.sm,
+  },
+  removeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: Spacing.sm,
+    paddingVertical: Spacing.xs,
+  },
+  removeButtonText: {
+    fontSize: Typography.fontSize.sm,
+    color: Colors.error,
+    marginLeft: Spacing.xs,
+    fontWeight: Typography.fontWeight.medium,
   },
 });

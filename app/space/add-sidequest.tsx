@@ -25,9 +25,17 @@ export default function AddSpaceSidequest() {
       Alert.alert('Permission needed', 'We need access to your photos to attach an image.');
       return;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.9 });
-    if (!result.canceled && result.assets && result.assets.length > 0) {
-      setImageUri(result.assets[0].uri);
+    try {
+      console.log('[AddSpaceSidequest] Opening image picker');
+      await new Promise((r) => setTimeout(r, 120));
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.9 });
+      console.log('[AddSpaceSidequest] Picker result:', result?.canceled ? 'canceled' : 'selected');
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setImageUri(result.assets[0].uri);
+      }
+    } catch (e) {
+      console.warn('[AddSpaceSidequest] Image picker failed', e);
+      Alert.alert('Error', 'Failed to open image library.');
     }
   };
 
