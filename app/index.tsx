@@ -9,6 +9,8 @@ export default function Index() {
   const isOnboardingComplete = useUserStore((state) => state.isOnboardingComplete);
   const loadUserSidequests = useSidequestStore((state) => state.loadUserSidequests);
   const loadUserCircles = useSocialStore((state) => state.loadUserCircles);
+  const initDataLayer = useSocialStore((state) => state.initDataLayer);
+  const teardownDataLayer = useSocialStore((state) => state.teardownDataLayer);
   const loadGlobalActivityFeed = useSocialStore((state) => state.loadGlobalActivityFeed);
   
   const [isMounted, setIsMounted] = useState(false);
@@ -36,7 +38,7 @@ export default function Index() {
           // Load all data in parallel
           await Promise.all([
             loadUserSidequests(authState.user.id),
-            loadUserCircles(authState.user.id),
+            initDataLayer(authState.user.id),
           ]);
           
           // After circles are loaded, load activity feed
@@ -56,6 +58,7 @@ export default function Index() {
       
       preloadData();
     }
+    return () => { if (authState.user) teardownDataLayer(); };
   }, [authState.user, dataPreloaded, loadUserSidequests, loadUserCircles, loadGlobalActivityFeed]);
 
   useEffect(() => {

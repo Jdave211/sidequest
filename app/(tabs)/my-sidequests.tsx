@@ -1,9 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
     Alert,
+    Animated,
     FlatList,
     SafeAreaView,
     ScrollView,
@@ -14,6 +15,8 @@ import {
     useWindowDimensions,
     View,
 } from 'react-native';
+import { Easing } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LoadingCard } from '../../components/LoadingScreen';
 import { BackgroundTextures, BorderRadius, Colors, ComponentSizes, getDifficultyColor, getStatusColor, Shadows, Spacing, Typography } from '../../constants/theme';
@@ -38,6 +41,7 @@ export default function MySidequests() {
   const [settingsQuery, setSettingsQuery] = useState('');
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const listAnim = useRef(new Animated.Value(0)).current;
 
   // Modal width (center popup)
   const modalWidth = useMemo(() => {
@@ -58,6 +62,16 @@ export default function MySidequests() {
     };
     loadPrefs();
   }, []);
+
+  // Initial list entrance animation
+  useEffect(() => {
+    Animated.timing(listAnim, {
+      toValue: 1,
+      duration: 450,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [listAnim]);
 
   // Load user's sidequests when user changes
   useEffect(() => {
@@ -260,7 +274,8 @@ export default function MySidequests() {
       <View style={styles.fixedHeader}>
         {/* Search Bar */}
         <View style={styles.searchContainer}>
-          <View style={styles.searchBar}>
+        <View style={styles.searchBar}>
+          <BlurView intensity={20} tint="light" style={StyleSheet.absoluteFillObject} />
             <Ionicons name="search" size={ComponentSizes.icon.medium} color={Colors.textSecondary} />
             <TextInput
               style={styles.searchInput}
@@ -293,6 +308,7 @@ export default function MySidequests() {
                 ]}
                 onPress={() => setSelectedStatus(option.value)}
               >
+                <BlurView intensity={16} tint="light" style={StyleSheet.absoluteFillObject} />
                 <Text
                   style={[
                     styles.filterPillText,
@@ -307,30 +323,36 @@ export default function MySidequests() {
         </View>
       </View>
 
-      {/* Sidequests List */}
-      <FlatList
-        data={filteredSidequests}
-        renderItem={renderSidequest}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContainer}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <View style={styles.emptyIcon}>
-              <Ionicons name="compass-outline" size={ComponentSizes.icon.xlarge * 2} color={Colors.textTertiary} />
+      {/* Sidequests List with subtle entrance animation */}
+      <Animated.View style={{
+        opacity: listAnim,
+        transform: [{ translateY: listAnim.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }],
+        flex: 1,
+      }}>
+        <FlatList
+          data={filteredSidequests}
+          renderItem={renderSidequest}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.listContainer}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <View style={styles.emptyIcon}>
+                <Ionicons name="compass-outline" size={ComponentSizes.icon.xlarge * 2} color={Colors.textTertiary} />
+              </View>
+              <Text style={styles.emptyTitle}>
+                {searchQuery ? 'No sidequests found' : 'No sidequests yet'}
+              </Text>
+              <Text style={styles.emptySubtitle}>
+                {searchQuery 
+                  ? `Try adjusting your search for "${searchQuery}"`
+                  : 'Ready to start your first adventure? Tap the + button below!'
+                }
+              </Text>
             </View>
-            <Text style={styles.emptyTitle}>
-              {searchQuery ? 'No sidequests found' : 'No sidequests yet'}
-            </Text>
-            <Text style={styles.emptySubtitle}>
-              {searchQuery 
-                ? `Try adjusting your search for "${searchQuery}"`
-                : 'Ready to start your first adventure? Tap the + button below!'
-              }
-            </Text>
-          </View>
-        }
-      />
+          }
+        />
+      </Animated.View>
 
       {/* Floating Action Button */}
       <TouchableOpacity
@@ -346,6 +368,7 @@ export default function MySidequests() {
         <View style={styles.overlayContainer}>
           <TouchableOpacity style={styles.overlayBackdrop} onPress={() => setIsSettingsOpen(false)} />
           <View style={[styles.modalCard, { width: modalWidth, maxWidth: modalWidth, paddingTop: insets.top + Spacing.lg }]}> 
+            <BlurView intensity={22} tint="light" style={StyleSheet.absoluteFillObject} />
             <View style={styles.modalHeader}>
               <TouchableOpacity style={styles.backButton} onPress={() => setIsSettingsOpen(false)} hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}>
                 <Ionicons name="chevron-back" size={ComponentSizes.icon.large} color={Colors.textPrimary} />

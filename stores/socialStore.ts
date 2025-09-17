@@ -1,5 +1,22 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AppState } from 'react-native';
 import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
+
+// Module-level helpers: cache + inflight + background refetch
+const inflight = new Map<string, Promise<unknown>>();
+let bgInterval: ReturnType<typeof setInterval> | null = null;
+let appStateSub: { remove: () => void } | null = null;
+let currentUserId: string | undefined;
+
+const cacheKeyCircles = (userId: string) => `cache:user_circles:${userId}`;
+const cacheKeyActivity = (circleId: string) => `cache:activity:${circleId}`;
+async function saveCache(key: string, value: unknown) {
+  try { await AsyncStorage.setItem(key, JSON.stringify(value)); } catch {}
+}
+async function loadCache<T>(key: string): Promise<T | null> {
+  try { const raw = await AsyncStorage.getItem(key); return raw ? (JSON.parse(raw) as T) : null; } catch { return null; }
+}
 
 interface FriendCircle {
   id: string;
@@ -56,6 +73,9 @@ interface ActivityFeedItem {
   activity_type: 'created' | 'started' | 'updated' | 'completed' | 'commented';
   description?: string;
   created_at: string;
+  image_urls?: string[] | null;
+  review?: string | null;
+  location?: string | null;
   user?: {
     display_name: string;
     avatar_url?: string;
@@ -103,6 +123,9 @@ interface SocialStore {
 
   // Utility
   generateCircleCode: () => string;
+  // Data layer lifecycle
+  initDataLayer: (userId: string) => Promise<void>;
+  teardownDataLayer: () => void;
 }
 
 export const useSocialStore = create<SocialStore>((set, get) => ({
@@ -119,6 +142,45 @@ export const useSocialStore = create<SocialStore>((set, get) => ({
   setCurrentCircle: (circle: FriendCircle | null) => set({ currentCircle: circle }),
   setLoading: (isLoading: boolean) => set({ isLoading }),
   setError: (error: string | null) => set({ error }),
+
+  // Initialize background refresh + hydrate from cache
+  initDataLayer: async (userId: string) => {
+    currentUserId = userId;
+    // Rehydrate cached circles for instant UI
+    const cachedCircles = await loadCache<FriendCircle[]>(cacheKeyCircles(userId));
+    if (cachedCircles && cachedCircles.length > 0) {
+      set({ userCircles: cachedCircles });
+    }
+    // Fetch fresh data in background
+    await get().loadUserCircles(userId);
+
+    // Periodic background refetch
+    if (!bgInterval) {
+      bgInterval = setInterval(() => {
+        if (!currentUserId) return;
+        get().loadUserCircles(currentUserId);
+        const circle = get().currentCircle;
+        if (circle) get().loadActivityFeed(circle.id);
+      }, 30000); // 30s
+    }
+    // Refetch on foreground
+    if (!appStateSub) {
+      const sub = AppState.addEventListener('change', (state) => {
+        if (state === 'active' && currentUserId) {
+          get().loadUserCircles(currentUserId);
+          const circle = get().currentCircle;
+          if (circle) get().loadActivityFeed(circle.id);
+        }
+      });
+      appStateSub = { remove: () => sub.remove() };
+    }
+  },
+
+  teardownDataLayer: () => {
+    if (bgInterval) { clearInterval(bgInterval); bgInterval = null; }
+    if (appStateSub) { appStateSub.remove(); appStateSub = null; }
+    currentUserId = undefined;
+  },
 
   // Generate a unique 6-character code with better distribution
   generateCircleCode: (): string => {
@@ -140,8 +202,17 @@ export const useSocialStore = create<SocialStore>((set, get) => ({
   // Load user's circles
   loadUserCircles: async (userId: string) => {
     try {
-      get().setLoading(true);
-      const { data, error } = await supabase
+      // Deduplicate concurrent requests
+      const key = `loadUserCircles:${userId}`;
+      const existing = inflight.get(key);
+      if (existing) { await existing; return; }
+
+      // Show loader only if there is nothing to show yet
+      const shouldShowLoader = get().userCircles.length === 0;
+      if (shouldShowLoader) get().setLoading(true);
+
+      const p = (async () => {
+        const { data, error } = await supabase
         .from('circle_members')
         .select(`
           circle_id,
@@ -150,6 +221,7 @@ export const useSocialStore = create<SocialStore>((set, get) => ({
             name,
             code,
             description,
+            display_picture,
             created_by,
             created_at,
             updated_at,
@@ -161,13 +233,19 @@ export const useSocialStore = create<SocialStore>((set, get) => ({
         .eq('user_id', userId)
         .eq('is_active', true);
 
-      if (error) {
-        console.warn('[loadActivityFeed] error', error);
-        throw error;
-      }
+        if (error) {
+          console.warn('[loadUserCircles] error', error);
+          throw error;
+        }
 
-      const circles = (data || []).map((item: any) => item.friend_circles).filter(Boolean) as FriendCircle[];
-      set({ userCircles: circles });
+        const circles = (data || []).map((item: any) => item.friend_circles).filter(Boolean) as FriendCircle[];
+        set({ userCircles: circles });
+        await saveCache(cacheKeyCircles(userId), circles);
+      })();
+
+      inflight.set(key, p);
+      await p;
+      inflight.delete(key);
     } catch (err) {
       get().setError(err instanceof Error ? err.message : 'Failed to load circles');
     } finally {
@@ -565,6 +643,11 @@ export const useSocialStore = create<SocialStore>((set, get) => ({
   // Load activity feed
   loadActivityFeed: async (circleId: string): Promise<void> => {
     try {
+      const key = `loadActivity:${circleId}`;
+      const existing = inflight.get(key);
+      if (existing) { await existing; return; }
+
+      const p = (async () => {
       // Get sidequest ids for this circle
       const { data: circle, error: circleError } = await supabase
         .from('friend_circles')
@@ -583,7 +666,7 @@ export const useSocialStore = create<SocialStore>((set, get) => ({
       // Load activities by ids
       const { data: activities, error: activitiesError } = await supabase
         .from('sidequest_activities')
-        .select('id, user_id, description, created_at, image_urls, location, title, category, status')
+        .select('id, user_id, description, review, created_at, image_urls, location, title, category, status')
         .in('id', ids)
         .order('created_at', { ascending: false })
         .limit(50);
@@ -616,6 +699,8 @@ export const useSocialStore = create<SocialStore>((set, get) => ({
         user_id: a.user_id,
         activity_type: 'created' as const,
         created_at: a.created_at,
+        description: a.description,
+        review: a.review,
         image_urls: a.image_urls,
         location: a.location,
         user: userMap[a.user_id] || { display_name: 'Unknown User', avatar_url: null },
@@ -624,7 +709,16 @@ export const useSocialStore = create<SocialStore>((set, get) => ({
 
       console.log(`[loadActivityFeed] Loaded ${formattedActivities.length} activities for circle ${circleId}`);
       set({ activityFeed: formattedActivities });
+      await saveCache(cacheKeyActivity(circleId), formattedActivities);
+      })();
+
+      inflight.set(key, p);
+      await p;
+      inflight.delete(key);
     } catch (err) {
+      // Fallback to cache to avoid empty flicker
+      const cached = await loadCache<ActivityFeedItem[]>(cacheKeyActivity(circleId));
+      if (cached && cached.length > 0) set({ activityFeed: cached });
       get().setError(err instanceof Error ? err.message : 'Failed to load activity feed');
     }
   },
@@ -648,7 +742,7 @@ export const useSocialStore = create<SocialStore>((set, get) => ({
 
       const { data: activities, error: activitiesError } = await supabase
         .from('sidequest_activities')
-        .select('id, user_id, description, created_at, image_urls, location, title, category, status')
+        .select('id, user_id, description, review, created_at, image_urls, location, title, category, status')
         .in('id', allIds)
         .order('created_at', { ascending: false })
         .limit(100);
@@ -678,6 +772,8 @@ export const useSocialStore = create<SocialStore>((set, get) => ({
         user_id: a.user_id,
         activity_type: 'created' as const,
         created_at: a.created_at,
+        description: a.description,
+        review: a.review,
         image_urls: a.image_urls,
         location: a.location,
         user: userMap[a.user_id] || { display_name: 'Unknown User', avatar_url: null },

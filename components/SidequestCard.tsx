@@ -1,13 +1,18 @@
 import { Ionicons } from '@expo/vector-icons';
-import React from 'react';
+import { BlurView } from 'expo-blur';
+import React, { useRef, useState } from 'react';
 import {
-    Image,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  FlatList,
+  Image,
+  Modal,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { BorderRadius, Colors, Shadows, Spacing, Typography } from '../constants/theme';
+import { BackgroundTextures, BorderRadius, Colors, Shadows, Spacing, Typography } from '../constants/theme';
 
 // Stock images for sidequests
 const SIDEQUEST_STOCK_IMAGES = [
@@ -113,9 +118,34 @@ interface SidequestCardProps {
 export default function SidequestCard({ item, spaceName, onPress, onRemove, showRemoveButton = false }: SidequestCardProps) {
   const sidequestTitle = item.sidequest?.title || item.title || 'Untitled Sidequest';
   const displaySpaceName = spaceName || 'Unknown Space';
+  const [showModal, setShowModal] = useState(false);
+
+  const allImages: string[] = Array.isArray(item.image_urls) && item.image_urls.length > 0
+    ? item.image_urls
+    : (Array.isArray(item?.sidequest?.image_urls) ? item.sidequest.image_urls : []);
+
+  const reviewText: string | undefined = item.review || item?.sidequest?.review;
+  const locationText: string | undefined = item.location || item?.sidequest?.location;
+  const [carouselIndex, setCarouselIndex] = useState(0);
+  const [cardWidth, setCardWidth] = useState(0);
+  const [showZoom, setShowZoom] = useState(false);
+  const viewableRef = useRef(({ viewableItems }: any) => {
+    if (viewableItems && viewableItems.length > 0 && viewableItems[0].index != null) {
+      setCarouselIndex(viewableItems[0].index);
+    }
+  });
+  const viewConfigRef = useRef({ viewAreaCoveragePercentThreshold: 50 });
+
+  const handleShare = async () => {
+    try {
+      const message = `${sidequestTitle}${displaySpaceName ? ` • ${displaySpaceName}` : ''}`;
+      await Share.share({ message });
+    } catch {}
+  };
   
   return (
-    <TouchableOpacity style={styles.listingCard} onPress={onPress} activeOpacity={0.7}>
+    <>
+    <TouchableOpacity style={styles.listingCard} onPress={onPress || (() => setShowModal(true))} activeOpacity={0.7}>
       {/* Main Image */}
       <View style={styles.imageContainer}>
         <Image 
@@ -177,6 +207,126 @@ export default function SidequestCard({ item, spaceName, onPress, onRemove, show
         )}
       </View>
     </TouchableOpacity>
+    {/* Detail Modal */}
+    <Modal visible={showModal} transparent animationType="fade">
+      <View style={styles.modalOverlay}>
+        <BlurView intensity={25} tint="light" style={StyleSheet.absoluteFillObject} />
+        <View style={[StyleSheet.absoluteFillObject, styles.overlayTexture]} />
+        <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setShowModal(false)} />
+        <View style={styles.modalCenterWrapper}>
+          <View style={styles.modalCard} onLayout={(e) => setCardWidth(e.nativeEvent.layout.width)}>
+            {/* Header */}
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle} numberOfLines={1}>{sidequestTitle}</Text>
+              <TouchableOpacity onPress={() => setShowModal(false)}>
+                <Ionicons name="close" size={22} color={Colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Content scroll */}
+            <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
+              {/* Media carousel */}
+              {allImages.length > 0 ? (
+                <View>
+                  <FlatList
+                    data={allImages}
+                    keyExtractor={(uri, idx) => `${uri}-${idx}`}
+                    horizontal
+                    pagingEnabled
+                    showsHorizontalScrollIndicator={false}
+                    renderItem={({ item: uri }) => (
+                      <View style={{ width: Math.max(0, cardWidth - Spacing.lg * 2), alignSelf: 'center' }}>
+                        <Image
+                          source={{ uri, cache: 'force-cache', headers: { Accept: 'image/*' } }}
+                          style={[styles.modalImage, { width: Math.max(0, cardWidth - Spacing.lg * 2) }]}
+                          resizeMode="cover"
+                        />
+                      </View>
+                    )}
+                    onViewableItemsChanged={viewableRef.current}
+                    viewabilityConfig={viewConfigRef.current}
+                    style={{ width: Math.max(0, cardWidth - Spacing.lg * 2), alignSelf: 'center' }}
+                  />
+                  {/* Zoom control */}
+                  <TouchableOpacity style={styles.zoomBtn} onPress={() => setShowZoom(true)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Ionicons name="expand-outline" size={16} color={Colors.textSecondary} style={{ opacity: 0.8 }} />
+                  </TouchableOpacity>
+                  <View style={styles.dotsRow}>
+                    {allImages.map((_, i) => (
+                      <View key={i} style={[styles.dot, i === carouselIndex && styles.dotActive]} />
+                    ))}
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.modalEmptyMedia}>
+                  <Ionicons name="image-outline" size={36} color={Colors.textSecondary} />
+                  <Text style={styles.modalEmptyText}>No media</Text>
+                </View>
+              )}
+
+              {/* Review + Location row */}
+              {(reviewText || locationText) ? (
+                <View style={styles.infoRow}>
+                  {reviewText ? (
+                    <View style={[styles.reviewSection, styles.infoLeft]}>
+                      <Text style={styles.sectionLabel}>Review</Text>
+                      <Text style={styles.reviewText}>{reviewText}</Text>
+                    </View>
+                  ) : <View style={styles.infoLeft} />}
+                  {locationText ? (
+                    <View style={[styles.locationSection, styles.infoRight]}>
+                      <Text style={styles.sectionLabel}>Location</Text>
+                      <View style={styles.locationRow}>
+                        <Ionicons name="location-outline" size={16} color={Colors.textSecondary} />
+                        <Text style={styles.locationText} numberOfLines={2}>{locationText}</Text>
+                      </View>
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
+            </ScrollView>
+
+            {/* Footer actions */}
+            <View style={styles.modalFooter}>
+              <TouchableOpacity style={styles.shareBtn} onPress={handleShare}>
+                <Ionicons name="share-outline" size={18} color={Colors.textPrimary} />
+                <Text style={styles.shareBtnText}>Share</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </View>
+    </Modal>
+
+    {/* Fullscreen zoom modal */}
+    <Modal visible={showZoom} transparent animationType="fade">
+      <View style={styles.zoomOverlay}>
+        <TouchableOpacity style={StyleSheet.absoluteFillObject} onPress={() => setShowZoom(false)} />
+        <View style={styles.zoomHeader}>
+          <TouchableOpacity onPress={() => setShowZoom(false)} style={styles.zoomCloseBtn}>
+            <Ionicons name="close" size={22} color={Colors.white} />
+          </TouchableOpacity>
+        </View>
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={styles.zoomContent}
+          maximumZoomScale={3}
+          minimumZoomScale={1}
+          showsVerticalScrollIndicator={false}
+          showsHorizontalScrollIndicator={false}
+          centerContent
+        >
+          {allImages[carouselIndex] ? (
+            <Image
+              source={{ uri: allImages[carouselIndex], cache: 'force-cache', headers: { Accept: 'image/*' } }}
+              style={styles.zoomImage}
+              resizeMode="contain"
+            />
+          ) : null}
+        </ScrollView>
+      </View>
+    </Modal>
+    </>
   );
 }
 
@@ -256,5 +406,174 @@ const styles = StyleSheet.create({
     color: Colors.error,
     marginLeft: Spacing.xs,
     fontWeight: Typography.fontWeight.medium,
+  },
+
+  // Modal styles (liquid glass)
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'transparent',
+  },
+  modalCenterWrapper: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.lg,
+  },
+  modalCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.35)',
+    width: '95%',
+    maxWidth: 420,
+    maxHeight: '90%',
+    overflow: 'hidden',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+  },
+  modalTitle: {
+    fontSize: Typography.fontSize.lg,
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.textPrimary,
+    flex: 1,
+    paddingRight: Spacing.md,
+  },
+  modalScroll: {
+    paddingHorizontal: Spacing.lg,
+  },
+  mediaColumn: {
+    gap: Spacing.md,
+    paddingBottom: Spacing.lg,
+  },
+  modalImage: {
+    width: '100%',
+    height: 260,
+    borderRadius: BorderRadius.md,
+    backgroundColor: Colors.surface,
+  },
+  dotsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: Spacing.sm,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(0,0,0,0.15)',
+  },
+  dotActive: {
+    backgroundColor: Colors.textPrimary,
+  },
+  modalEmptyMedia: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Spacing.xl,
+  },
+  modalEmptyText: {
+    marginTop: Spacing.sm,
+    color: Colors.textSecondary,
+  },
+  reviewSection: {
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.lg,
+  },
+  sectionLabel: {
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.semibold,
+    color: Colors.textSecondary,
+    marginBottom: Spacing.xs,
+  },
+  reviewText: {
+    fontSize: Typography.fontSize.lg,
+    color: Colors.textPrimary,
+    lineHeight: Typography.lineHeight.lg,
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+  },
+  shareBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+  },
+  shareBtnText: {
+    color: Colors.textPrimary,
+    fontWeight: Typography.fontWeight.medium,
+  },
+  overlayTexture: {
+    ...BackgroundTextures.paper,
+    opacity: 0.35,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    gap: Spacing.lg,
+  },
+  infoLeft: {
+    flex: 1,
+  },
+  infoRight: {
+    width: 160,
+  },
+  locationSection: {
+    paddingTop: Spacing.md,
+  },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+  },
+  locationText: {
+    color: Colors.textPrimary,
+    fontSize: Typography.fontSize.base,
+    lineHeight: Typography.lineHeight.base,
+    flex: 1,
+  },
+  zoomBtn: {
+    position: 'absolute',
+    top: Spacing.sm,
+    right: Spacing.sm,
+    paddingHorizontal: Spacing.xs,
+    paddingVertical: Spacing.xs,
+  },
+  zoomOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.9)',
+  },
+  zoomHeader: {
+    position: 'absolute',
+    top: Spacing.xl,
+    right: Spacing.xl,
+    zIndex: 2,
+  },
+  zoomCloseBtn: {
+    padding: Spacing.sm,
+  },
+  zoomContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Spacing.lg,
+  },
+  zoomImage: {
+    width: '100%',
+    height: '100%',
   },
 });

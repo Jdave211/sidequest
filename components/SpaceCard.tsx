@@ -36,8 +36,8 @@ function hashString(value: string): number {
 }
 
 function getCircleImageSource(circle: any) {
-  if (circle?.image_url) {
-    return { uri: circle.image_url } as const;
+  if (circle?.display_picture) {
+    return { uri: circle.display_picture } as const;
   }
   const key = circle?.id || circle?.code || circle?.name || String(Math.random());
   const idx = hashString(String(key)) % SPACE_STOCK_IMAGES.length;

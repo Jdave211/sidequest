@@ -125,11 +125,20 @@ export default function MySpaces({ onRefresh }: MySpacesProps) {
 
       // Upload display picture if selected
       let displayPictureUrl: string | undefined;
-      if (displayPicture) {
+      if (displayPicture && authState.user) {
         try {
-          const uploadResult = await uploadImageToSupabase(displayPicture, 'space-images');
-          displayPictureUrl = uploadResult.url;
-          console.log('[CreateSpace] Display picture uploaded:', displayPictureUrl);
+          const uploadResult = await uploadImageToSupabase(displayPicture, authState.user.id, {
+            bucketName: 'space-images',
+            folder: authState.user.id,
+            contentType: 'image/jpeg'
+          });
+          
+          if (uploadResult.success && uploadResult.url) {
+            displayPictureUrl = uploadResult.url;
+            console.log('[CreateSpace] Display picture uploaded:', displayPictureUrl);
+          } else {
+            throw new Error(uploadResult.error || 'Upload failed');
+          }
         } catch (error) {
           console.error('[CreateSpace] Display picture upload failed:', error);
           Alert.alert('Warning', 'Failed to upload display picture, but space will be created without it.');
@@ -266,7 +275,7 @@ export default function MySpaces({ onRefresh }: MySpacesProps) {
               refreshing={isLoading} 
               onRefresh={onRefresh}
               tintColor={Colors.primary}
-              title={null}
+              title={undefined}
             />
           }
         />
@@ -367,10 +376,18 @@ export default function MySpaces({ onRefresh }: MySpacesProps) {
                 <Text style={styles.secondaryButtonText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={styles.primaryButton}
+                style={[styles.primaryButton, isSubmitting && { opacity: 0.7 }]}
                 onPress={handleCreateCircle}
+                disabled={isSubmitting}
               >
-                <Text style={styles.primaryButtonText}>Create</Text>
+                {isSubmitting ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Ionicons name="sync" size={18} color={Colors.primary} />
+                    <Text style={styles.primaryButtonText}>Creating...</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.primaryButtonText}>Create</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>

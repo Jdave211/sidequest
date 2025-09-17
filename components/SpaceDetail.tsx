@@ -1,9 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
+    Animated,
+    Easing,
     FlatList,
     Image,
     Modal,
@@ -15,6 +18,7 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BorderRadius, Colors, ComponentSizes, Spacing, Typography } from '../constants/theme';
 import { supabase } from '../lib/supabase';
 import { useSidequestStore } from '../stores/sidequestStore';
@@ -32,6 +36,40 @@ export const SpaceDetail: React.FC<SpaceDetailProps> = ({ spaceId, onBack }) => 
   const { loadActivityFeed, loadUserCircles } = useSocialStore();
   const { authState } = useUserStore();
   const { removeSidequestFromSpace } = useSidequestStore();
+  const insets = useSafeAreaInsets();
+  const toastAnim = React.useRef(new Animated.Value(0)).current;
+  const [toastVisible, setToastVisible] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const toastDelayTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const toastHideTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showToast = (message: string, delayMs: number = 400) => {
+    // Clear any pending timers
+    if (toastDelayTimerRef.current) clearTimeout(toastDelayTimerRef.current);
+    if (toastHideTimerRef.current) clearTimeout(toastHideTimerRef.current);
+
+    setToastMessage(message);
+    toastAnim.setValue(0);
+
+    toastDelayTimerRef.current = setTimeout(() => {
+      setToastVisible(true);
+      Animated.timing(toastAnim, {
+        toValue: 1,
+        duration: 220,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start(() => {
+        toastHideTimerRef.current = setTimeout(() => {
+          Animated.timing(toastAnim, {
+            toValue: 0,
+            duration: 180,
+            easing: Easing.in(Easing.cubic),
+            useNativeDriver: true,
+          }).start(() => setToastVisible(false));
+        }, 3300);
+      });
+    }, delayMs);
+  };
   
   const [currentSpace, setCurrentSpace] = useState<any>(null);
   const [activityFeed, setActivityFeed] = useState<any[]>([]);
@@ -192,11 +230,13 @@ export const SpaceDetail: React.FC<SpaceDetailProps> = ({ spaceId, onBack }) => 
     
     try {
       await useSocialStore.getState().deleteSpace(currentSpace.id);
-      Alert.alert('Space Deleted', 'The space has been permanently deleted.', [
-        { text: 'OK', onPress: () => router.back() }
-      ]);
+      // Show minimalist toast and navigate back shortly after
+      const delayMs = 500;
+      showToast('Space deleted', delayMs);
+      setTimeout(() => router.back(), delayMs + 800);
     } catch (error) {
-      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to delete space. Please try again.');
+      const message = error instanceof Error ? error.message : 'Failed to delete space';
+      showToast(message);
     }
   };
 
@@ -300,6 +340,26 @@ export const SpaceDetail: React.FC<SpaceDetailProps> = ({ spaceId, onBack }) => 
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Top Toast */}
+      {toastVisible && (
+        <Animated.View
+          style={[
+            styles.toastContainer,
+            {
+              top: insets.top + 10,
+              opacity: toastAnim,
+              transform: [
+                {
+                  translateY: toastAnim.interpolate({ inputRange: [0, 1], outputRange: [-12, 0] })
+                }
+              ]
+            }
+          ]}
+        >
+          <BlurView intensity={24} tint="light" style={StyleSheet.absoluteFillObject} />
+          <Text style={styles.toastText}>{toastMessage}</Text>
+        </Animated.View>
+      )}
       {/* Minimal Header - Just back button and space name */}
       <View style={styles.minimalHeader}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
@@ -351,11 +411,13 @@ export const SpaceDetail: React.FC<SpaceDetailProps> = ({ spaceId, onBack }) => 
 
       {/* Options Modal */}
       <Modal visible={showOptionsModal} transparent animationType="fade">
-        <TouchableOpacity 
-          style={styles.modalOverlay} 
-          activeOpacity={1} 
-          onPress={() => setShowOptionsModal(false)}
-        >
+        <View style={styles.modalOverlay}>
+          <BlurView intensity={25} tint="light" style={StyleSheet.absoluteFillObject} />
+          <TouchableOpacity 
+            style={StyleSheet.absoluteFillObject}
+            activeOpacity={1}
+            onPress={() => setShowOptionsModal(false)}
+          />
           <View style={styles.optionsModalWrapper}>
             <View style={styles.optionsModal}>
               <TouchableOpacity 
@@ -418,179 +480,178 @@ export const SpaceDetail: React.FC<SpaceDetailProps> = ({ spaceId, onBack }) => 
               )}
             </View>
           </View>
-        </TouchableOpacity>
+        </View>
       </Modal>
 
       {/* Share Modal */}
       <Modal visible={showShareModal} transparent animationType="slide">
-        <TouchableOpacity 
-          style={styles.modalOverlay} 
-          activeOpacity={1} 
-          onPress={() => setShowShareModal(false)}
-        >
-          <View style={styles.shareModal}>
-            <Text style={styles.shareTitle}>Share Space</Text>
-            <TouchableOpacity style={styles.shareOption} onPress={handleShareLink}>
-              <Ionicons name="link-outline" size={ComponentSizes.icon.large} color={Colors.primary} />
-              <Text style={styles.shareOptionText}>Share Link</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.shareOption} onPress={handleShareCode}>
-              <Ionicons name="copy-outline" size={ComponentSizes.icon.large} color={Colors.primary} />
-              <Text style={styles.shareOptionText}>Share Code</Text>
-            </TouchableOpacity>
+        <View style={styles.modalOverlay}>
+          <BlurView intensity={25} tint="light" style={StyleSheet.absoluteFillObject} />
+          <TouchableOpacity 
+            style={StyleSheet.absoluteFillObject}
+            activeOpacity={1} 
+            onPress={() => setShowShareModal(false)}
+          />
+          <View style={styles.centeredModalWrapper}>
+            <View style={styles.shareModal}>
+              <Text style={styles.shareTitle}>Share Space</Text>
+              <TouchableOpacity style={styles.shareOption} onPress={handleShareLink}>
+                <Ionicons name="link-outline" size={ComponentSizes.icon.large} color={Colors.primary} />
+                <Text style={styles.shareOptionText}>Share Link</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.shareOption} onPress={handleShareCode}>
+                <Ionicons name="copy-outline" size={ComponentSizes.icon.large} color={Colors.primary} />
+                <Text style={styles.shareOptionText}>Share Code</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </TouchableOpacity>
+        </View>
       </Modal>
 
       {/* Edit Modal */}
       <Modal visible={showEditModal} transparent animationType="slide">
-        <TouchableOpacity 
-          style={styles.modalOverlay} 
-          activeOpacity={1} 
-          onPress={() => setShowEditModal(false)}
-        >
-          <View style={styles.editModal}>
-            <Text style={styles.editTitle}>Edit Space</Text>
-            <TextInput
-              style={styles.editInput}
-              value={editName}
-              onChangeText={setEditName}
-              placeholder="Space name"
-            />
-            <TextInput
-              style={[styles.editInput, styles.editTextArea]}
-              value={editDescription}
-              onChangeText={setEditDescription}
-              placeholder="Space description"
-              multiline
-              numberOfLines={3}
-            />
-            <View style={styles.editButtons}>
-              <TouchableOpacity 
-                style={[styles.editButton, styles.cancelButton]} 
-                onPress={() => setShowEditModal(false)}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.editButton, styles.saveButton]} 
-                onPress={handleUpdateSpace}
-              >
-                <Text style={styles.saveButtonText}>Save</Text>
-              </TouchableOpacity>
+        <View style={styles.modalOverlay}>
+          <BlurView intensity={25} tint="light" style={StyleSheet.absoluteFillObject} />
+          <TouchableOpacity 
+            style={StyleSheet.absoluteFillObject}
+            activeOpacity={1} 
+            onPress={() => setShowEditModal(false)}
+          />
+          <View style={styles.centeredModalWrapper}>
+            <View style={styles.editModal}>
+              <Text style={styles.editTitle}>Edit Space</Text>
+              <TextInput
+                style={styles.editInput}
+                value={editName}
+                onChangeText={setEditName}
+                placeholder="Space name"
+              />
+              <TextInput
+                style={[styles.editInput, styles.editTextArea]}
+                value={editDescription}
+                onChangeText={setEditDescription}
+                placeholder="Space description"
+                multiline
+                numberOfLines={3}
+              />
+              <View style={styles.editButtons}>
+                <TouchableOpacity 
+                  style={[styles.editButton, styles.cancelButton]} 
+                  onPress={() => setShowEditModal(false)}
+                >
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.editButton, styles.saveButton]} 
+                  onPress={handleUpdateSpace}
+                >
+                  <Text style={styles.saveButtonText}>Save</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
-        </TouchableOpacity>
+        </View>
       </Modal>
 
       {/* Delete Confirmation Modal */}
       <Modal visible={showDeleteModal} transparent animationType="fade">
-        <TouchableOpacity 
-          style={styles.modalOverlay} 
-          activeOpacity={1} 
-          onPress={() => setShowDeleteModal(false)}
-        >
-          <View style={styles.deleteModal}>
-            <View style={styles.deleteIconContainer}>
-              <Ionicons name="warning" size={40} color={Colors.error} />
-            </View>
-            <Text style={styles.deleteTitle}>Delete Space</Text>
-            <Text style={styles.deleteMessage}>
-              Are you sure you want to delete "{currentSpace?.name}"?
-            </Text>
-            <Text style={styles.deleteSubMessage}>
-              This will:
-            </Text>
-            <View style={styles.deleteEffectsList}>
-              <View style={styles.deleteEffectItem}>
-                <Ionicons name="people" size={20} color={Colors.textSecondary} />
-                <Text style={styles.deleteEffectText}>Remove all members from the space</Text>
+        <View style={styles.modalOverlay}>
+          <BlurView intensity={25} tint="light" style={StyleSheet.absoluteFillObject} />
+          <TouchableOpacity 
+            style={StyleSheet.absoluteFillObject}
+            activeOpacity={1} 
+            onPress={() => setShowDeleteModal(false)}
+          />
+          <View style={styles.centeredModalWrapper}>
+            <View style={styles.deleteModal}>
+              <Text style={styles.deleteMessage}>
+                Delete "{currentSpace?.name}"?
+              </Text>
+              <Text style={styles.deleteWarning}>
+                This will permanently delete the space and remove all members.
+              </Text>
+              <View style={styles.deleteButtons}>
+                <TouchableOpacity 
+                  style={[styles.deleteButton, styles.cancelDeleteButton]} 
+                  onPress={() => setShowDeleteModal(false)}
+                >
+                  <Text style={styles.cancelDeleteButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.deleteButton, styles.confirmDeleteButton]} 
+                  onPress={handleDeleteSpace}
+                >
+                  <Text style={styles.confirmDeleteButtonText}>Delete</Text>
+                </TouchableOpacity>
               </View>
-              <View style={styles.deleteEffectItem}>
-                <Ionicons name="list" size={20} color={Colors.textSecondary} />
-                <Text style={styles.deleteEffectText}>Unlink all sidequests from the space</Text>
-              </View>
-              <View style={styles.deleteEffectItem}>
-                <Ionicons name="trash" size={20} color={Colors.textSecondary} />
-                <Text style={styles.deleteEffectText}>Delete the space permanently</Text>
-              </View>
-            </View>
-            <Text style={styles.deleteWarning}>
-              This action cannot be undone.
-            </Text>
-            <View style={styles.deleteButtons}>
-              <TouchableOpacity 
-                style={[styles.deleteButton, styles.cancelDeleteButton]} 
-                onPress={() => setShowDeleteModal(false)}
-              >
-                <Text style={styles.cancelDeleteButtonText}>Keep Space</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.deleteButton, styles.confirmDeleteButton]} 
-                onPress={handleDeleteSpace}
-              >
-                <Ionicons name="trash-outline" size={20} color={Colors.white} style={styles.deleteButtonIcon} />
-                <Text style={styles.confirmDeleteButtonText}>Delete Space</Text>
-              </TouchableOpacity>
             </View>
           </View>
-        </TouchableOpacity>
+        </View>
       </Modal>
 
       {/* Members Modal */}
       <Modal visible={showMembersModal} transparent animationType="slide">
-        <TouchableOpacity 
-          style={styles.modalOverlay} 
-          activeOpacity={1} 
-          onPress={() => setShowMembersModal(false)}
-        >
-          <View style={styles.membersModal}>
-            <Text style={styles.membersTitle}>Members</Text>
-            {loadingMembers ? (
-              <View style={styles.loadingContainer}>
-                <Text>Loading members...</Text>
-              </View>
-            ) : circleMembers.length === 0 ? (
-              <View style={styles.emptyMembers}>
-                <Text>No members found</Text>
-              </View>
-            ) : (
-              <FlatList
-                data={circleMembers}
-                keyExtractor={(item) => item.user_id}
-                renderItem={({ item: member }) => (
-                  <View style={styles.memberItem}>
-                    <View style={styles.memberAvatar}>
-                      {member.avatar_url ? (
-                        <Image source={{ uri: member.avatar_url }} style={styles.memberAvatarImage} />
-                      ) : (
-                        <Text style={styles.memberInitials}>
-                          {member.display_name?.charAt(0)?.toUpperCase() || '?'}
-                        </Text>
-                      )}
+        <View style={styles.modalOverlay}>
+          <BlurView intensity={25} tint="light" style={StyleSheet.absoluteFillObject} />
+          <TouchableOpacity 
+            style={StyleSheet.absoluteFillObject}
+            activeOpacity={1} 
+            onPress={() => setShowMembersModal(false)}
+          />
+          <View style={styles.centeredModalWrapper}>
+            <View style={styles.membersModal}>
+              <Text style={styles.membersTitle}>Members</Text>
+              {loadingMembers ? (
+                <View style={styles.loadingContainer}>
+                  <Text>Loading members...</Text>
+                </View>
+              ) : circleMembers.length === 0 ? (
+                <View style={styles.emptyMembers}>
+                  <Text>No members found</Text>
+                </View>
+              ) : (
+                <FlatList
+                  data={circleMembers}
+                  keyExtractor={(item) => item.user_id}
+                  renderItem={({ item: member }) => (
+                    <View style={styles.memberItem}>
+                      <View style={styles.memberAvatar}>
+                        {member.avatar_url ? (
+                          <Image source={{ uri: member.avatar_url }} style={styles.memberAvatarImage} />
+                        ) : (
+                          <Text style={styles.memberInitials}>
+                            {member.display_name?.charAt(0)?.toUpperCase() || '?'}
+                          </Text>
+                        )}
+                      </View>
+                      <View style={styles.memberInfo}>
+                        <Text style={styles.memberName}>{member.display_name || 'Unknown'}</Text>
+                        <Text style={styles.memberRole}>{member.role}</Text>
+                      </View>
+                      <View style={styles.memberBadges}>
+                        {member.role === 'admin' && (
+                          <Ionicons name="star" size={ComponentSizes.icon.small} color={Colors.warning} />
+                        )}
+                        {member.role === 'creator' && (
+                          <Ionicons name="star" size={ComponentSizes.icon.small} color={Colors.primary} />
+                        )}
+                      </View>
                     </View>
-                    <View style={styles.memberInfo}>
-                      <Text style={styles.memberName}>{member.display_name || 'Unknown'}</Text>
-                      <Text style={styles.memberRole}>{member.role}</Text>
-                    </View>
-                    <View style={styles.memberBadges}>
-                      {member.role === 'admin' && (
-                        <Ionicons name="star" size={ComponentSizes.icon.small} color={Colors.warning} />
-                      )}
-                      {member.role === 'creator' && (
-                        <Ionicons name="star" size={ComponentSizes.icon.small} color={Colors.primary} />
-                      )}
-                    </View>
-                  </View>
-                )}
-              />
-            )}
+                  )}
+                />
+              )}
+            </View>
           </View>
-        </TouchableOpacity>
+        </View>
       </Modal>
     </SafeAreaView>
   );
 };
+
+// Toast helper
+function showToast(message: string) {
+  // Note: This function relies on component scope values; we attach it to window to avoid re-renders.
+}
 
 const styles = StyleSheet.create({
   container: {
@@ -663,7 +724,7 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    backgroundColor: 'transparent',
   },
   optionsModalWrapper: {
     flex: 1,
@@ -673,16 +734,14 @@ const styles = StyleSheet.create({
     paddingRight: Spacing.lg,
   },
   optionsModal: {
-    backgroundColor: Colors.white,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     borderRadius: BorderRadius.md,
     paddingVertical: Spacing.sm,
     minWidth: 180,
     maxWidth: 250,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.35)',
+    overflow: 'hidden',
   },
   optionItem: {
     flexDirection: 'row',
@@ -703,10 +762,16 @@ const styles = StyleSheet.create({
     color: Colors.error,
   },
   shareModal: {
-    backgroundColor: Colors.white,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     margin: Spacing.xl,
     borderRadius: BorderRadius.lg,
-    padding: Spacing.xl,
+    padding: Spacing.lg,
+    maxWidth: 360,
+    width: '90%',
+    alignSelf: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.35)',
+    overflow: 'hidden',
   },
   shareTitle: {
     fontSize: Typography.fontSize['2xl'],
@@ -728,10 +793,16 @@ const styles = StyleSheet.create({
     marginLeft: Spacing.md,
   },
   editModal: {
-    backgroundColor: Colors.white,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     margin: Spacing.xl,
     borderRadius: BorderRadius.lg,
-    padding: Spacing.xl,
+    padding: Spacing.lg,
+    maxWidth: 360,
+    width: '90%',
+    alignSelf: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.35)',
+    overflow: 'hidden',
   },
   editTitle: {
     fontSize: Typography.fontSize['2xl'],
@@ -783,111 +854,75 @@ const styles = StyleSheet.create({
     fontWeight: Typography.fontWeight.medium,
   },
   deleteModal: {
-    backgroundColor: Colors.white,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     margin: Spacing.xl,
     borderRadius: BorderRadius.lg,
-    padding: Spacing.xl,
-    maxWidth: 400,
+    padding: Spacing.lg,
+    maxWidth: 360,
     width: '90%',
     alignSelf: 'center',
-  },
-  deleteIconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: Colors.error + '10', // 10% opacity
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.lg,
-    alignSelf: 'center',
-  },
-  deleteTitle: {
-    fontSize: Typography.fontSize['2xl'],
-    fontWeight: Typography.fontWeight.bold,
-    color: Colors.error,
-    marginBottom: Spacing.sm,
-    textAlign: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.35)',
+    overflow: 'hidden',
   },
   deleteMessage: {
     fontSize: Typography.fontSize.lg,
     color: Colors.textPrimary,
     textAlign: 'center',
-    marginBottom: Spacing.lg,
-    lineHeight: 24,
+    marginBottom: Spacing.md,
     fontWeight: Typography.fontWeight.medium,
-  },
-  deleteSubMessage: {
-    fontSize: Typography.fontSize.base,
-    color: Colors.textSecondary,
-    marginBottom: Spacing.sm,
-    fontWeight: Typography.fontWeight.medium,
-  },
-  deleteEffectsList: {
-    backgroundColor: Colors.background,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.lg,
-    marginBottom: Spacing.lg,
-  },
-  deleteEffectItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: Spacing.sm,
-    gap: Spacing.sm,
-  },
-  deleteEffectText: {
-    fontSize: Typography.fontSize.base,
-    color: Colors.textSecondary,
-    flex: 1,
   },
   deleteWarning: {
     fontSize: Typography.fontSize.sm,
-    color: Colors.error,
+    color: Colors.textSecondary,
     textAlign: 'center',
-    marginBottom: Spacing.xl,
-    fontWeight: Typography.fontWeight.medium,
+    marginBottom: Spacing.lg,
   },
   deleteButtons: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     gap: Spacing.md,
   },
   deleteButton: {
-    flex: 1,
-    paddingVertical: Spacing.md,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
     borderRadius: BorderRadius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  deleteButtonIcon: {
-    marginRight: Spacing.xs,
+    minWidth: 100,
   },
   cancelDeleteButton: {
-    backgroundColor: Colors.background,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    backgroundColor: 'transparent',
   },
   cancelDeleteButtonText: {
     fontSize: Typography.fontSize.base,
-    color: Colors.textPrimary,
-    fontWeight: Typography.fontWeight.medium,
+    color: Colors.textSecondary,
+    textAlign: 'center',
   },
   confirmDeleteButton: {
     backgroundColor: Colors.error,
-    flexDirection: 'row',
-    alignItems: 'center',
   },
   confirmDeleteButtonText: {
     fontSize: Typography.fontSize.base,
     color: Colors.white,
-    fontWeight: Typography.fontWeight.bold,
+    textAlign: 'center',
   },
   membersModal: {
-    backgroundColor: Colors.white,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     margin: Spacing.xl,
     borderRadius: BorderRadius.lg,
-    padding: Spacing.xl,
-    maxHeight: '70%',
-    marginTop: 58,
+    padding: Spacing.lg,
+    maxWidth: 360,
+    width: '90%',
+    alignSelf: 'center',
+    maxHeight: '75%',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.35)',
+    overflow: 'hidden',
+  },
+  centeredModalWrapper: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.lg,
   },
   membersTitle: {
     fontSize: Typography.fontSize.xlarge,
@@ -947,5 +982,22 @@ const styles = StyleSheet.create({
   memberBadges: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  toastContainer: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    zIndex: 1000,
+    borderRadius: BorderRadius.full,
+    overflow: 'hidden',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    alignSelf: 'center',
+  },
+  toastText: {
+    textAlign: 'center',
+    color: Colors.textPrimary,
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.medium,
   },
 });

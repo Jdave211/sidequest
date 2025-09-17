@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Alert, Animated, Dimensions, Image, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, Dimensions, Image, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { BorderRadius, Colors, Shadows, Spacing, Typography } from '../../constants/theme';
 import { supabase } from '../../lib/supabase';
 import { useSocialStore, useUserStore } from '../../stores';
@@ -102,8 +102,18 @@ export default function CreateSpace() {
       let displayPictureUrl: string | undefined;
       if (displayPicture) {
         try {
-          displayPictureUrl = await uploadImageToSupabase(displayPicture, 'space-images');
-          console.log('[CreateSpace] Display picture uploaded:', displayPictureUrl);
+          const uploadResult = await uploadImageToSupabase(displayPicture, authState.user.id, {
+            bucketName: 'space-images',
+            folder: authState.user.id,
+            contentType: 'image/jpeg'
+          });
+          
+          if (uploadResult.success && uploadResult.url) {
+            displayPictureUrl = uploadResult.url;
+            console.log('[CreateSpace] Display picture uploaded:', displayPictureUrl);
+          } else {
+            throw new Error(uploadResult.error || 'Upload failed');
+          }
         } catch (error) {
           console.error('[CreateSpace] Display picture upload failed:', error);
           Alert.alert('Warning', 'Failed to upload display picture, but space will be created without it.');
@@ -115,9 +125,9 @@ export default function CreateSpace() {
       console.log('[CreateSpace] Supabase session check', {
         hasSession: !!session.session,
         userId: session.session?.user?.id,
-        sessionValid: session.session && !session.session.expires_at || new Date(session.session.expires_at * 1000) > new Date(),
+        sessionValid: session.session && (!session.session.expires_at || new Date(session.session.expires_at * 1000) > new Date()),
       });
-      const circle = await createCircle(name.trim(), description.trim() || undefined, displayPictureUrl, authState.user.id);
+      const circle = await createCircle(name.trim(), description.trim() || undefined, displayPictureUrl);
       console.log('[CreateSpace] Success', { id: circle.id, code: circle.code, name: circle.name });
       Alert.alert('Space Created', `"${circle.name}" is ready!\n\nInvite code: ${circle.code}`);
       router.replace('/(tabs)/social');
@@ -233,7 +243,7 @@ export default function CreateSpace() {
             <View style={styles.createBtnContent}>
               {isSubmitting ? (
                 <View style={styles.loadingContainer}>
-                  <View style={styles.loadingSpinner} />
+                  <ActivityIndicator size="small" color={Colors.white} />
                   <Text style={styles.createText}>Creating Space...</Text>
                 </View>
               ) : (
