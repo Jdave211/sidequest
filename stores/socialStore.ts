@@ -34,6 +34,7 @@ interface SocialSidequest {
   category: string;
   difficulty: 'easy' | 'medium' | 'hard';
   status: 'not_started' | 'in_progress' | 'completed';
+  review?: string;
   created_by: string;
   circle_id?: string;
   visibility: 'private' | 'circle' | 'public';
@@ -89,9 +90,9 @@ interface SocialStore {
   // Circle Members
   loadCircleMembers: (circleId: string) => Promise<void>;
 
-  // Social Sidequests
+  // Social Sidequests (now backed by sidequest_activities)
   loadCircleSidequests: (circleId: string) => Promise<void>;
-  createSocialSidequest: (sidequest: Partial<SocialSidequest> & { created_by?: string }) => Promise<SocialSidequest>;
+  createSocialSidequest: (sidequest: Partial<SocialSidequest> & { created_by?: string }, extra?: { image_urls?: string[]; location?: string }) => Promise<{ id: string }>;
   updateSidequestStatus: (sidequestId: string, status: SocialSidequest['status']) => Promise<void>;
 
   // Activity Feed
@@ -415,54 +416,62 @@ export const useSocialStore = create<SocialStore>((set, get) => ({
   // Load circle sidequests
   loadCircleSidequests: async (circleId: string): Promise<void> => {
     try {
-      const { data, error } = await supabase
-        .from('social_sidequests')
-        .select(`
-          *,
-          users (
-            display_name,
-            avatar_url
-          )
-        `)
-        .eq('circle_id', circleId)
+      // Resolve IDs in this circle
+      const { data: circle, error: circleError } = await supabase
+        .from('friend_circles')
+        .select('sidequest_ids')
+        .eq('id', circleId)
+        .single();
+
+      if (circleError) throw circleError;
+      const ids: string[] = Array.isArray(circle?.sidequest_ids) ? circle.sidequest_ids : [];
+      if (ids.length === 0) { set({ circleSidequests: [] }); return; }
+
+      const { data: activities, error: activitiesError } = await supabase
+        .from('sidequest_activities')
+        .select('id, user_id, title, description, category, difficulty, status, review, image_urls, location, created_at, updated_at')
+        .in('id', ids)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      set({ circleSidequests: data || [] });
+      if (activitiesError) throw activitiesError;
+      set({ circleSidequests: (activities as any) || [] });
     } catch (err) {
       get().setError(err instanceof Error ? err.message : 'Failed to load sidequests');
     }
   },
 
-  // Create social sidequest
-  createSocialSidequest: async (sidequest: Partial<SocialSidequest> & { created_by?: string }): Promise<SocialSidequest> => {
+  // Create social sidequest (insert into sidequest_activities and link to circle)
+  createSocialSidequest: async (sidequest: Partial<SocialSidequest> & { created_by?: string }, extra?: { image_urls?: string[]; location?: string }): Promise<{ id: string }> => {
     try {
-      const { data, error } = await supabase
-        .from('social_sidequests')
+      // Insert activity (this becomes the sidequest itself now)
+      const { data: created, error: createError } = await supabase
+        .from('sidequest_activities')
         .insert({
-          ...sidequest,
+          user_id: sidequest.created_by,
+          title: sidequest.title,
+          description: sidequest.description,
+          category: sidequest.category,
+          difficulty: sidequest.difficulty,
+          status: sidequest.status,
+          review: sidequest.review,
+          image_urls: extra?.image_urls || null,
+          location: extra?.location || null,
         })
-        .select()
+        .select('id')
         .single();
 
-      if (error) throw error;
+      if (createError) throw createError;
 
-      // Create an activity record for the new sidequest
-      try {
-        await supabase.from('sidequest_activities').insert({
-          sidequest_id: data.id,
-          user_id: sidequest.created_by,
-          activity_type: 'created' as const,
-          description: data.title ? `Created "${data.title}"` : null,
+      // Link to circle via RPC using the new id
+      if (sidequest.circle_id) {
+        const { error: linkError } = await supabase.rpc('add_sidequest_to_circle', {
+          circle: sidequest.circle_id,
+          sidequest: created.id,
         });
-      } catch (e) {
-        // Non-fatal: log and continue
-        console.warn('[SocialStore.createSocialSidequest] activity insert failed', e);
+        if (linkError) throw linkError;
       }
 
-      // Note: Personal sidequests now load directly from database, no need to sync
-
-      // Reload sidequests and activity feed for the circle
+      // Refresh lists
       if (sidequest.circle_id) {
         await Promise.all([
           get().loadCircleSidequests(sidequest.circle_id),
@@ -470,23 +479,21 @@ export const useSocialStore = create<SocialStore>((set, get) => ({
         ]);
       }
 
-      return data;
+      return { id: created.id };
     } catch (err) {
       get().setError(err instanceof Error ? err.message : 'Failed to create sidequest');
       throw err;
     }
   },
 
-  // Update sidequest status
+  // Update sidequest status (on sidequest_activities)
   updateSidequestStatus: async (sidequestId: string, status: SocialSidequest['status']): Promise<void> => {
     try {
       const updateData: any = { status };
-      if (status === 'completed') {
-        updateData.completed_at = new Date().toISOString();
-      }
+      // completed_at not tracked on new schema; rely on status only
 
       const { error } = await supabase
-        .from('social_sidequests')
+        .from('sidequest_activities')
         .update(updateData)
         .eq('id', sidequestId);
 
@@ -506,21 +513,36 @@ export const useSocialStore = create<SocialStore>((set, get) => ({
   // Load activity feed
   loadActivityFeed: async (circleId: string): Promise<void> => {
     try {
-      // Load sidequests first
-      const { data: sq, error: sqError } = await supabase
-        .from('social_sidequests')
-        .select('id, created_at, created_by, title, category')
-        .eq('circle_id', circleId)
+      // Get sidequest ids for this circle
+      const { data: circle, error: circleError } = await supabase
+        .from('friend_circles')
+        .select('sidequest_ids')
+        .eq('id', circleId)
+        .single();
+
+      if (circleError) {
+        console.warn('[loadActivityFeed] circle error', circleError);
+        throw circleError;
+      }
+
+      const ids: string[] = Array.isArray(circle?.sidequest_ids) ? circle.sidequest_ids : [];
+      if (ids.length === 0) { set({ activityFeed: [] }); return; }
+
+      // Load activities by ids
+      const { data: activities, error: activitiesError } = await supabase
+        .from('sidequest_activities')
+        .select('id, user_id, description, created_at, image_urls, location, title, category, status')
+        .in('id', ids)
         .order('created_at', { ascending: false })
         .limit(50);
 
-      if (sqError) {
-        console.warn('[loadActivityFeed] sidequests error', sqError);
-        throw sqError;
+      if (activitiesError) {
+        console.warn('[loadActivityFeed] activities error', activitiesError);
+        throw activitiesError;
       }
 
       // Load user data separately
-      const userIds = [...new Set((sq || []).map(s => s.created_by))];
+      const userIds = [...new Set((activities || []).map(a => a.user_id))];
       const { data: users, error: usersError } = await supabase
         .from('users')
         .select('id, display_name, avatar_url')
@@ -536,18 +558,20 @@ export const useSocialStore = create<SocialStore>((set, get) => ({
         return acc;
       }, {} as any);
 
-      const activities = (sq || []).map((s: any) => ({
-        id: `synth-${s.id}`,
-        sidequest_id: s.id,
-        user_id: s.created_by,
+      const formattedActivities: ActivityFeedItem[] = (activities || []).map((a: any) => ({
+        id: a.id,
+        sidequest_id: a.id,
+        user_id: a.user_id,
         activity_type: 'created' as const,
-        created_at: s.created_at,
-        user: userMap[s.created_by] || { display_name: 'Unknown User', avatar_url: null },
-        sidequest: { title: s.title, category: s.category },
+        created_at: a.created_at,
+        image_urls: a.image_urls,
+        location: a.location,
+        user: userMap[a.user_id] || { display_name: 'Unknown User', avatar_url: null },
+        sidequest: { title: a.title, category: a.category },
       }));
 
-      console.log(`[loadActivityFeed] Loaded ${activities.length} activities for circle ${circleId}`);
-      set({ activityFeed: activities });
+      console.log(`[loadActivityFeed] Loaded ${formattedActivities.length} activities for circle ${circleId}`);
+      set({ activityFeed: formattedActivities });
     } catch (err) {
       get().setError(err instanceof Error ? err.message : 'Failed to load activity feed');
     }
@@ -560,21 +584,27 @@ export const useSocialStore = create<SocialStore>((set, get) => ({
         set({ activityFeed: [] });
         return;
       }
-      // Load sidequests first
-      const { data: sq, error: sqError } = await supabase
-        .from('social_sidequests')
-        .select('id, created_at, created_by, title, category, circle_id')
-        .in('circle_id', circleIds)
+      // Collect IDs from circles
+      const { data: circles, error: circlesError } = await supabase
+        .from('friend_circles')
+        .select('id, sidequest_ids')
+        .in('id', circleIds);
+      if (circlesError) { console.warn('[loadGlobalActivityFeed] circles error', circlesError); throw circlesError; }
+
+      const allIds = Array.from(new Set((circles || []).flatMap((c: any) => c.sidequest_ids || [])));
+      if (allIds.length === 0) { set({ activityFeed: [] }); return; }
+
+      const { data: activities, error: activitiesError } = await supabase
+        .from('sidequest_activities')
+        .select('id, user_id, description, created_at, image_urls, location, title, category, status')
+        .in('id', allIds)
         .order('created_at', { ascending: false })
         .limit(100);
 
-      if (sqError) {
-        console.warn('[loadGlobalActivityFeed] sidequests error', sqError);
-        throw sqError;
-      }
+      if (activitiesError) { console.warn('[loadGlobalActivityFeed] activities error', activitiesError); throw activitiesError; }
 
       // Load user data separately
-      const userIds = [...new Set((sq || []).map(s => s.created_by))];
+      const userIds = [...new Set((activities || []).map(a => a.user_id))];
       const { data: users, error: usersError } = await supabase
         .from('users')
         .select('id, display_name, avatar_url')
@@ -590,19 +620,20 @@ export const useSocialStore = create<SocialStore>((set, get) => ({
         return acc;
       }, {} as any);
 
-      const activities = (sq || []).map((s: any) => ({
-        id: `synth-${s.id}`,
-        sidequest_id: s.id,
-        user_id: s.created_by,
+      const formattedActivities: ActivityFeedItem[] = (activities || []).map((a: any) => ({
+        id: a.id,
+        sidequest_id: a.id,
+        user_id: a.user_id,
         activity_type: 'created' as const,
-        created_at: s.created_at,
-        circle_id: s.circle_id,
-        user: userMap[s.created_by] || { display_name: 'Unknown User', avatar_url: null },
-        sidequest: { title: s.title, category: s.category },
+        created_at: a.created_at,
+        image_urls: a.image_urls,
+        location: a.location,
+        user: userMap[a.user_id] || { display_name: 'Unknown User', avatar_url: null },
+        sidequest: { title: a.title, category: a.category },
       }));
 
-      console.log(`[loadGlobalActivityFeed] Loaded ${activities.length} activities for ${circleIds.length} circles`);
-      set({ activityFeed: activities });
+      console.log(`[loadGlobalActivityFeed] Loaded ${formattedActivities.length} activities across ${circleIds.length} circles`);
+      set({ activityFeed: formattedActivities });
     } catch (err) {
       get().setError(err instanceof Error ? err.message : 'Failed to load activity feed');
     }

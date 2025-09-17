@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { decode } from 'base-64';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
@@ -23,7 +24,8 @@ export default function AddSidequest() {
   const authState = useUserStore((state) => state.authState);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [imageUri, setImageUri] = useState<string | null>(null);
+  const [imageUris, setImageUris] = useState<string[]>([]);
+  const [location, setLocation] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const pickImage = async () => {
@@ -37,11 +39,13 @@ export default function AddSidequest() {
       await new Promise((r) => setTimeout(r, 120));
       const result = await ImagePicker.launchImageLibraryAsync({ 
         mediaTypes: ['images'], 
+        allowsMultipleSelection: true,
+        selectionLimit: 5,
         quality: 0.9 
       });
       console.log('[AddSidequest] Picker result:', result?.canceled ? 'canceled' : 'selected');
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        setImageUri(result.assets[0].uri);
+        setImageUris(prev => [...prev, ...result.assets.map(a => a.uri)].slice(0, 5));
       }
     } catch (e) {
       console.warn('[AddSidequest] Image picker failed', e);
@@ -49,18 +53,61 @@ export default function AddSidequest() {
     }
   };
 
-  const uploadImageIfAny = async (): Promise<string | undefined> => {
-    if (!imageUri || !authState.user) return undefined;
-    const response = await fetch(imageUri);
-    const blob = await response.blob();
-    const path = `${authState.user.id}/${Date.now()}.jpg`;
-    const { data, error } = await supabase.storage.from('social-sidequests').upload(path, blob, { 
-      contentType: 'image/jpeg', 
-      upsert: false 
-    });
-    if (error) throw error;
-    const { data: publicUrl } = supabase.storage.from('social-sidequests').getPublicUrl(data.path);
-    return publicUrl.publicUrl;
+  const uploadImagesIfAny = async (): Promise<string[] | undefined> => {
+    if (!imageUris.length || !authState.user) return undefined;
+    const uploaded: string[] = [];
+    for (const uri of imageUris) {
+      try {
+        console.log('[AddSidequest] Uploading image:', uri);
+        // First check if URI is valid
+        console.log('[AddSidequest] Processing image URI:', uri);
+        
+        // Convert local file URI to base64
+        const base64Response = await fetch(uri);
+        const imageBlob = await base64Response.blob();
+        
+        // Convert blob to base64 string
+        const reader = new FileReader();
+        const base64String = await new Promise<string>((resolve, reject) => {
+          reader.onload = () => {
+            if (typeof reader.result === 'string') {
+              // Remove data URL prefix (e.g., "data:image/jpeg;base64,")
+              const base64 = reader.result.split(',')[1];
+              resolve(base64);
+            } else {
+              reject(new Error('Failed to convert to base64'));
+            }
+          };
+          reader.onerror = () => reject(reader.error);
+          reader.readAsDataURL(imageBlob);
+        });
+        
+        console.log('[AddSidequest] Converted to base64, length:', base64String.length);
+        
+        const path = `${authState.user.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`;
+        console.log('[AddSidequest] Upload path:', path);
+        
+        // Upload base64 data
+        const { data, error } = await supabase.storage.from('sidequest-images').upload(path, decode(base64String), { 
+          contentType: 'image/jpeg',
+          upsert: false 
+        });
+        
+        if (error) {
+          console.error('[AddSidequest] Upload error:', error);
+          throw error;
+        }
+        
+        console.log('[AddSidequest] Upload success:', data);
+        const { data: publicUrl } = supabase.storage.from('sidequest-images').getPublicUrl(data.path);
+        console.log('[AddSidequest] Public URL:', publicUrl.publicUrl);
+        uploaded.push(publicUrl.publicUrl);
+      } catch (err) {
+        console.error('[AddSidequest] Image upload failed:', err);
+        throw err;
+      }
+    }
+    return uploaded;
   };
 
   const handleSubmit = async () => {
@@ -75,7 +122,7 @@ export default function AddSidequest() {
 
     try {
       setIsSubmitting(true);
-      const imageUrl = await uploadImageIfAny();
+      const imageUrls = await uploadImagesIfAny();
       
       await addSidequest({
         title: title.trim(),
@@ -87,7 +134,7 @@ export default function AddSidequest() {
         tags: [],
         notes: description.trim() || undefined,
         progress: 0,
-      }, authState.user.id);
+      }, authState.user.id, { image_urls: imageUrls, location: location.trim() || undefined });
 
       Alert.alert('Success', 'Sidequest added successfully!', [
         { text: 'OK', onPress: () => router.back() }
@@ -121,16 +168,26 @@ export default function AddSidequest() {
         />
 
         <Text style={[styles.label, { marginTop: Spacing.md }]}>Image (optional)</Text>
-        {imageUri ? (
-          <TouchableOpacity onPress={pickImage}>
-            <Image source={{ uri: imageUri }} style={styles.image} />
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity style={styles.imagePicker} onPress={pickImage}>
-            <Ionicons name="image" size={ComponentSizes.icon.large} color={Colors.primary} />
-            <Text style={styles.imagePickerText}>Pick an image</Text>
-          </TouchableOpacity>
+        <TouchableOpacity style={styles.imagePicker} onPress={pickImage}>
+          <Ionicons name="image" size={ComponentSizes.icon.large} color={Colors.primary} />
+          <Text style={styles.imagePickerText}>Pick image(s)</Text>
+        </TouchableOpacity>
+        {imageUris.length > 0 && (
+          <View style={{ marginTop: Spacing.sm }}>
+            <Image source={{ uri: imageUris[0] }} style={styles.image} />
+            {imageUris.length > 1 && (
+              <Text style={{ color: Colors.textSecondary, marginTop: Spacing.xs }}>{`+${imageUris.length - 1} more`}</Text>
+            )}
+          </View>
         )}
+        <Text style={[styles.label, { marginTop: Spacing.md }]}>Location (optional)</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="eg. Vancouver, BC"
+          placeholderTextColor={Colors.textTertiary}
+          value={location}
+          onChangeText={setLocation}
+        />
 
         <Text style={[styles.label, { marginTop: Spacing.md }]}>Description (optional)</Text>
         <TextInput

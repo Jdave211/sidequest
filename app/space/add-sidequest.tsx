@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { decode } from 'base-64';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
@@ -16,7 +17,8 @@ export default function AddSpaceSidequest() {
 
   const [title, setTitle] = useState(typeof params?.title === 'string' ? params.title : '');
   const [review, setReview] = useState('');
-  const [imageUri, setImageUri] = useState<string | null>(null);
+  const [imageUris, setImageUris] = useState<string[]>([]);
+  const [location, setLocation] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const pickImage = async () => {
@@ -28,10 +30,10 @@ export default function AddSpaceSidequest() {
     try {
       console.log('[AddSpaceSidequest] Opening image picker');
       await new Promise((r) => setTimeout(r, 120));
-      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.9 });
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsMultipleSelection: true, selectionLimit: 5, quality: 0.9 });
       console.log('[AddSpaceSidequest] Picker result:', result?.canceled ? 'canceled' : 'selected');
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        setImageUri(result.assets[0].uri);
+        setImageUris(prev => [...prev, ...result.assets.map(a => a.uri)].slice(0, 5));
       }
     } catch (e) {
       console.warn('[AddSpaceSidequest] Image picker failed', e);
@@ -39,15 +41,61 @@ export default function AddSpaceSidequest() {
     }
   };
 
-  const uploadImageIfAny = async (): Promise<string | undefined> => {
-    if (!imageUri || !authState.user) return undefined;
-    const response = await fetch(imageUri);
-    const blob = await response.blob();
-    const path = `${authState.user.id}/${Date.now()}.jpg`;
-    const { data, error } = await supabase.storage.from('social-sidequests').upload(path, blob, { contentType: 'image/jpeg', upsert: false });
-    if (error) throw error;
-    const { data: publicUrl } = supabase.storage.from('social-sidequests').getPublicUrl(data.path);
-    return publicUrl.publicUrl;
+  const uploadImagesIfAny = async (): Promise<string[] | undefined> => {
+    if (!imageUris.length || !authState.user) return undefined;
+    const uploaded: string[] = [];
+    for (const uri of imageUris) {
+      try {
+        console.log('[AddSpaceSidequest] Uploading image:', uri);
+        // First check if URI is valid
+        console.log('[AddSpaceSidequest] Processing image URI:', uri);
+        
+        // Convert local file URI to base64
+        const base64Response = await fetch(uri);
+        const imageBlob = await base64Response.blob();
+        
+        // Convert blob to base64 string
+        const reader = new FileReader();
+        const base64String = await new Promise<string>((resolve, reject) => {
+          reader.onload = () => {
+            if (typeof reader.result === 'string') {
+              // Remove data URL prefix (e.g., "data:image/jpeg;base64,")
+              const base64 = reader.result.split(',')[1];
+              resolve(base64);
+            } else {
+              reject(new Error('Failed to convert to base64'));
+            }
+          };
+          reader.onerror = () => reject(reader.error);
+          reader.readAsDataURL(imageBlob);
+        });
+        
+        console.log('[AddSpaceSidequest] Converted to base64, length:', base64String.length);
+        
+        const path = `${authState.user.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`;
+        console.log('[AddSpaceSidequest] Upload path:', path);
+        
+        // Upload base64 data
+        const { data, error } = await supabase.storage.from('sidequest-images').upload(path, decode(base64String), { 
+          contentType: 'image/jpeg',
+          upsert: false 
+        });
+        
+        if (error) {
+          console.error('[AddSpaceSidequest] Upload error:', error);
+          throw error;
+        }
+        
+        console.log('[AddSpaceSidequest] Upload success:', data);
+        const { data: publicUrl } = supabase.storage.from('sidequest-images').getPublicUrl(data.path);
+        console.log('[AddSpaceSidequest] Public URL:', publicUrl.publicUrl);
+        uploaded.push(publicUrl.publicUrl);
+      } catch (err) {
+        console.error('[AddSpaceSidequest] Image upload failed:', err);
+        throw err;
+      }
+    }
+    return uploaded;
   };
 
   const onSubmit = async () => {
@@ -63,21 +111,25 @@ export default function AddSpaceSidequest() {
       Alert.alert('Missing title', 'Please enter a title.');
       return;
     }
+    if (!review.trim()) {
+      Alert.alert('Missing review', 'Please write a short review.');
+      return;
+    }
 
     try {
       setIsSubmitting(true);
-      const imageUrl = await uploadImageIfAny();
+      const imageUrls = await uploadImagesIfAny();
       const created = await createSocialSidequest({
         title: title.trim(),
         description: review.trim() || undefined,
         created_by: authState.user.id,
         circle_id: currentCircle.id,
         visibility: 'circle',
-        review: review.trim() || undefined,
+        review: review.trim(),
         category: 'other',
         difficulty: 'easy',
         status: 'not_started',
-      } as any);
+      } as any, { image_urls: imageUrls, location: location.trim() || undefined });
       Alert.alert('Added', 'Sidequest added to this space.', [{ text: 'OK', onPress: () => router.back() }]);
     } catch (e: any) {
       console.error('[AddSpaceSidequest] Failed to create', e);
@@ -108,16 +160,26 @@ export default function AddSpaceSidequest() {
         />
 
         <Text style={[styles.label, { marginTop: Spacing.md }]}>Image (optional)</Text>
-        {imageUri ? (
-          <TouchableOpacity onPress={pickImage}>
-            <Image source={{ uri: imageUri }} style={styles.image} />
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity style={styles.imagePicker} onPress={pickImage}>
-            <Ionicons name="image" size={ComponentSizes.icon.large} color={Colors.primary} />
-            <Text style={styles.imagePickerText}>Pick an image</Text>
-          </TouchableOpacity>
+        <TouchableOpacity style={styles.imagePicker} onPress={pickImage}>
+          <Ionicons name="image" size={ComponentSizes.icon.large} color={Colors.primary} />
+          <Text style={styles.imagePickerText}>Pick image(s)</Text>
+        </TouchableOpacity>
+        {imageUris.length > 0 && (
+          <View style={{ marginTop: Spacing.sm }}>
+            <Image source={{ uri: imageUris[0] }} style={styles.image} />
+            {imageUris.length > 1 && (
+              <Text style={{ color: Colors.textSecondary, marginTop: Spacing.xs }}>{`+${imageUris.length - 1} more`}</Text>
+            )}
+          </View>
         )}
+        <Text style={[styles.label, { marginTop: Spacing.md }]}>Location (optional)</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="eg. Vancouver, BC"
+          placeholderTextColor={Colors.textTertiary}
+          value={location}
+          onChangeText={setLocation}
+        />
 
         <Text style={[styles.label, { marginTop: Spacing.md }]}>Review (only visible as posted by you)</Text>
         <TextInput

@@ -10,7 +10,11 @@ interface SidequestStore {
   
   // Actions
   loadUserSidequests: (userId: string) => Promise<void>;
-  addSidequest: (sidequest: Omit<Sidequest, 'id' | 'createdAt' | 'updatedAt'>, userId: string) => Promise<void>;
+  addSidequest: (
+    sidequest: Omit<Sidequest, 'id' | 'createdAt' | 'updatedAt'>,
+    userId: string,
+    extra?: { image_urls?: string[]; location?: string }
+  ) => Promise<void>;
   updateSidequest: (id: string, updates: Partial<Sidequest>) => Promise<void>;
   deleteSidequest: (id: string) => Promise<void>; // Delete completely from everywhere
   removeSidequestFromSpace: (id: string, spaceId: string) => Promise<void>; // Remove from specific space only
@@ -38,9 +42,9 @@ export const useSidequestStore = create<SidequestStore>((set, get) => ({
       get().setError(null);
       
       const { data, error } = await supabase
-        .from('social_sidequests')
-        .select('*')
-        .eq('created_by', userId)
+        .from('sidequest_activities')
+        .select('id, user_id, title, description, category, difficulty, status, review, image_urls, location, created_at, updated_at')
+        .eq('user_id', userId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -54,10 +58,10 @@ export const useSidequestStore = create<SidequestStore>((set, get) => ({
         difficulty: mapDifficulty(item.difficulty),
         estimatedTime: 'Unknown',
         status: mapStatus(item.status),
-        tags: item.circle_id ? ['space-shared'] : [],
+        tags: [],
         createdAt: new Date(item.created_at),
-        updatedAt: new Date(item.updated_at),
-        completedAt: item.completed_at ? new Date(item.completed_at) : undefined,
+        updatedAt: new Date(item.updated_at || item.created_at),
+        completedAt: undefined,
         progress: item.status === 'completed' ? 100 : item.status === 'in_progress' ? 50 : 0,
         notes: item.review || undefined,
       }));
@@ -74,37 +78,25 @@ export const useSidequestStore = create<SidequestStore>((set, get) => ({
   },
 
   // Add new sidequest to Supabase
-  addSidequest: async (sidequestData: Omit<Sidequest, 'id' | 'createdAt' | 'updatedAt'>, userId: string) => {
+  addSidequest: async (sidequestData: Omit<Sidequest, 'id' | 'createdAt' | 'updatedAt'>, userId: string, extra?: { image_urls?: string[]; location?: string }) => {
     try {
       const { data, error } = await supabase
-        .from('social_sidequests')
+        .from('sidequest_activities')
         .insert({
+          user_id: userId,
           title: sidequestData.title,
           description: sidequestData.description,
-          category: sidequestData.category.toLowerCase(),
-          difficulty: sidequestData.difficulty.toLowerCase(),
+          category: (sidequestData.category as unknown as string)?.toLowerCase?.() || sidequestData.category,
+          difficulty: (sidequestData.difficulty as unknown as string)?.toLowerCase?.() || sidequestData.difficulty,
           status: mapStatusToDb(sidequestData.status),
-          created_by: userId,
-          visibility: 'private',
           review: sidequestData.notes,
+          image_urls: extra?.image_urls || null,
+          location: extra?.location || null,
         })
         .select()
         .single();
 
       if (error) throw error;
-
-      // Create an activity record for the new sidequest
-      try {
-        await supabase.from('sidequest_activities').insert({
-          sidequest_id: data.id,
-          user_id: userId,
-          activity_type: 'created' as const,
-          description: `Created "${data.title}"`,
-        });
-      } catch (activityError) {
-        // Non-fatal: log and continue
-        console.warn('[SidequestStore] Failed to create activity record:', activityError);
-      }
 
       // Reload user sidequests to get the updated list
       await get().loadUserSidequests(userId);
@@ -125,25 +117,23 @@ export const useSidequestStore = create<SidequestStore>((set, get) => ({
       if (updates.description !== undefined) updateData.description = updates.description;
       if (updates.status) updateData.status = mapStatusToDb(updates.status);
       if (updates.notes !== undefined) updateData.review = updates.notes;
-      if (updates.status === SidequestStatus.COMPLETED) {
-        updateData.completed_at = new Date().toISOString();
-      }
+      // updated_at handled by DB trigger or we rely on default behavior
 
       const { error } = await supabase
-        .from('social_sidequests')
+        .from('sidequest_activities')
         .update(updateData)
         .eq('id', id);
 
       if (error) throw error;
 
       // Update local state
-      set((state) => ({
-        sidequests: state.sidequests.map(sidequest => 
-          sidequest.id === id 
-            ? { ...sidequest, ...updates, updatedAt: new Date() }
-            : sidequest
-        )
-      }));
+    set((state) => ({
+      sidequests: state.sidequests.map(sidequest => 
+        sidequest.id === id 
+          ? { ...sidequest, ...updates, updatedAt: new Date() }
+          : sidequest
+      )
+    }));
       console.log('[SidequestStore] Updated sidequest:', id);
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to update sidequest';
@@ -157,35 +147,34 @@ export const useSidequestStore = create<SidequestStore>((set, get) => ({
     try {
       console.log('[SidequestStore] Deleting sidequest completely from everywhere:', id);
       
-      // First, get the sidequest details to know if it was shared in spaces
-      const { data: sidequestData, error: fetchError } = await supabase
-        .from('social_sidequests')
-        .select('circle_id')
-        .eq('id', id)
-        .single();
+      // Remove this sidequest from any circles that reference it
+      const { data: circlesWithSidequest, error: circlesError } = await supabase
+        .from('friend_circles')
+        .select('id, sidequest_ids')
+        .contains('sidequest_ids', [id]);
 
-      if (fetchError) throw fetchError;
+      if (circlesError) throw circlesError;
 
-      // Delete all activities first
-      const { error: activitiesError } = await supabase
-        .from('sidequest_activities')
-        .delete()
-        .eq('sidequest_id', id);
+      if (Array.isArray(circlesWithSidequest) && circlesWithSidequest.length > 0) {
+        await Promise.all(
+          circlesWithSidequest.map((c: any) =>
+            supabase.rpc('remove_sidequest_from_circle', { circle: c.id, sidequest: id })
+          )
+        );
+      }
 
-      if (activitiesError) throw activitiesError;
-
-      // Then delete the sidequest itself
+      // Delete the sidequest itself
       const { error } = await supabase
-        .from('social_sidequests')
+        .from('sidequest_activities')
         .delete()
         .eq('id', id);
 
       if (error) throw error;
 
       // Update local state
-      set((state) => ({
-        sidequests: state.sidequests.filter(sidequest => sidequest.id !== id)
-      }));
+    set((state) => ({
+      sidequests: state.sidequests.filter(sidequest => sidequest.id !== id)
+    }));
 
       // Update social feeds immediately to avoid stale UI, then refresh from server
       try {
@@ -194,14 +183,9 @@ export const useSidequestStore = create<SidequestStore>((set, get) => ({
 
         // Optimistically remove from whatever feed is currently shown
         if (Array.isArray(socialState.activityFeed) && socialState.activityFeed.length > 0) {
-          const filtered = socialState.activityFeed.filter((a: any) => a.sidequest_id !== id);
+          const filtered = socialState.activityFeed.filter((a: any) => (a?.id ?? a?.sidequest_id) !== id);
           // setState directly to avoid requiring an action
           useSocialStore.setState({ activityFeed: filtered });
-        }
-
-        // If we know the space, refresh that space's feed
-        if (sidequestData?.circle_id) {
-          await socialState.loadActivityFeed(sidequestData.circle_id);
         }
 
         // Refresh global feed with correct circle IDs
@@ -229,13 +213,8 @@ export const useSidequestStore = create<SidequestStore>((set, get) => ({
     try {
       console.log('[SidequestStore] Removing sidequest from space:', id, spaceId);
       
-      // Update the sidequest to remove it from this specific space
-      // Set circle_id to null to remove from space but keep the personal sidequest
-      const { error } = await supabase
-        .from('social_sidequests')
-        .update({ circle_id: null })
-        .eq('id', id)
-        .eq('circle_id', spaceId);
+      // Remove the sidequest id from the circle's sidequest_ids array via RPC
+      const { error } = await supabase.rpc('remove_sidequest_from_circle', { circle: spaceId, sidequest: id });
 
       if (error) throw error;
 
@@ -245,7 +224,7 @@ export const useSidequestStore = create<SidequestStore>((set, get) => ({
         const socialState = useSocialStore.getState();
 
         if (Array.isArray(socialState.activityFeed) && socialState.activityFeed.length > 0) {
-          const filtered = socialState.activityFeed.filter((a: any) => a.sidequest_id !== id);
+          const filtered = socialState.activityFeed.filter((a: any) => (a?.id ?? a?.sidequest_id) !== id);
           useSocialStore.setState({ activityFeed: filtered });
         }
 

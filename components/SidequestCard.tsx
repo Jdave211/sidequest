@@ -32,11 +32,52 @@ const hashString = (str: string): number => {
 };
 
 const getSidequestImageSource = (item: any) => {
-  if (item.image_url) {
-    return { uri: item.image_url };
+  // Priority 1: Activity has image_urls (from sidequest_activities table)
+  if (Array.isArray(item.image_urls) && item.image_urls.length > 0 && item.image_urls[0]) {
+    // Add cache busting and explicit headers for React Native Image
+    const imageUrl = item.image_urls[0];
+    return { 
+      uri: imageUrl,
+      cache: 'force-cache',
+      headers: {
+        'Accept': 'image/*',
+      }
+    };
   }
-  // Use title to consistently select same image for same sidequest
-  const index = hashString(item.title || item.id) % SIDEQUEST_STOCK_IMAGES.length;
+  
+  // Priority 2: Check nested sidequest object for image_urls
+  if (item.sidequest && Array.isArray(item.sidequest.image_urls) && item.sidequest.image_urls.length > 0) {
+    return { 
+      uri: item.sidequest.image_urls[0],
+      cache: 'force-cache',
+      headers: {
+        'Accept': 'image/*',
+      }
+    };
+  }
+  
+  // Priority 3: Backward compatibility - single image_url
+  if (item.image_url) {
+    return { 
+      uri: item.image_url,
+      cache: 'force-cache',
+      headers: {
+        'Accept': 'image/*',
+      }
+    };
+  }
+  if (item.sidequest && item.sidequest.image_url) {
+    return { 
+      uri: item.sidequest.image_url,
+      cache: 'force-cache',
+      headers: {
+        'Accept': 'image/*',
+      }
+    };
+  }
+  
+  // Priority 4: Use title to consistently select same stock image
+  const index = hashString(item.title || item.sidequest?.title || item.id) % SIDEQUEST_STOCK_IMAGES.length;
   return SIDEQUEST_STOCK_IMAGES[index];
 };
 
@@ -78,9 +119,16 @@ export default function SidequestCard({ item, spaceName, onPress, onRemove, show
       {/* Main Image */}
       <View style={styles.imageContainer}>
         <Image 
-          source={getSidequestImageSource(item.sidequest || item)} 
+          source={getSidequestImageSource(item)} 
           style={styles.listingImage} 
           resizeMode="cover"
+          onError={(error) => {
+            console.log('[SidequestCard] Image load error, falling back to stock image');
+          }}
+          onLoad={() => {
+            console.log('[SidequestCard] Image loaded successfully');
+          }}
+          defaultSource={SIDEQUEST_STOCK_IMAGES[0]}
         />
         <View style={[styles.statusBadge, { backgroundColor: getActivityColor(item.activity_type) }]}>
           <Text style={styles.statusText}>{item.activity_type}</Text>
