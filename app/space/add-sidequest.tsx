@@ -1,12 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
-import { decode } from 'base-64';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { Alert, Image, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { BorderRadius, Colors, ComponentSizes, Shadows, Spacing, Typography } from '../../constants/theme';
-import { supabase } from '../../lib/supabase';
 import { useSocialStore, useUserStore } from '../../stores';
+import { getSuccessfulImageUrls, getUploadErrors, uploadMultipleImagesToSupabase } from '../../utils/imageUpload';
 
 export default function AddSpaceSidequest() {
   const router = useRouter();
@@ -43,59 +42,28 @@ export default function AddSpaceSidequest() {
 
   const uploadImagesIfAny = async (): Promise<string[] | undefined> => {
     if (!imageUris.length || !authState.user) return undefined;
-    const uploaded: string[] = [];
-    for (const uri of imageUris) {
-      try {
-        console.log('[AddSpaceSidequest] Uploading image:', uri);
-        // First check if URI is valid
-        console.log('[AddSpaceSidequest] Processing image URI:', uri);
-        
-        // Convert local file URI to base64
-        const base64Response = await fetch(uri);
-        const imageBlob = await base64Response.blob();
-        
-        // Convert blob to base64 string
-        const reader = new FileReader();
-        const base64String = await new Promise<string>((resolve, reject) => {
-          reader.onload = () => {
-            if (typeof reader.result === 'string') {
-              // Remove data URL prefix (e.g., "data:image/jpeg;base64,")
-              const base64 = reader.result.split(',')[1];
-              resolve(base64);
-            } else {
-              reject(new Error('Failed to convert to base64'));
-            }
-          };
-          reader.onerror = () => reject(reader.error);
-          reader.readAsDataURL(imageBlob);
-        });
-        
-        console.log('[AddSpaceSidequest] Converted to base64, length:', base64String.length);
-        
-        const path = `${authState.user.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`;
-        console.log('[AddSpaceSidequest] Upload path:', path);
-        
-        // Upload base64 data
-        const { data, error } = await supabase.storage.from('sidequest-images').upload(path, decode(base64String), { 
-          contentType: 'image/jpeg',
-          upsert: false 
-        });
-        
-        if (error) {
-          console.error('[AddSpaceSidequest] Upload error:', error);
-          throw error;
+    
+    try {
+      console.log('[AddSpaceSidequest] Uploading images:', imageUris.length);
+      const results = await uploadMultipleImagesToSupabase(imageUris, authState.user.id);
+      
+      const successfulUrls = getSuccessfulImageUrls(results);
+      const errors = getUploadErrors(results);
+      
+      if (errors.length > 0) {
+        console.warn('[AddSpaceSidequest] Some uploads failed:', errors);
+        // Continue with successful uploads, but warn user
+        if (successfulUrls.length === 0) {
+          throw new Error('All image uploads failed');
         }
-        
-        console.log('[AddSpaceSidequest] Upload success:', data);
-        const { data: publicUrl } = supabase.storage.from('sidequest-images').getPublicUrl(data.path);
-        console.log('[AddSpaceSidequest] Public URL:', publicUrl.publicUrl);
-        uploaded.push(publicUrl.publicUrl);
-      } catch (err) {
-        console.error('[AddSpaceSidequest] Image upload failed:', err);
-        throw err;
       }
+      
+      console.log('[AddSpaceSidequest] Successfully uploaded:', successfulUrls.length, 'images');
+      return successfulUrls;
+    } catch (error) {
+      console.error('[AddSpaceSidequest] Image upload failed:', error);
+      throw error;
     }
-    return uploaded;
   };
 
   const onSubmit = async () => {
