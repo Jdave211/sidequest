@@ -3,18 +3,19 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Alert,
-  FlatList,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  useWindowDimensions,
-  View,
+    Alert,
+    FlatList,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    useWindowDimensions,
+    View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LoadingCard } from '../../components/LoadingScreen';
 import { BackgroundTextures, BorderRadius, Colors, ComponentSizes, getDifficultyColor, getStatusColor, Shadows, Spacing, Typography } from '../../constants/theme';
 import { useSidequestStore, useUserStore } from '../../stores';
 import { SidequestStatus } from '../../types/sidequest';
@@ -221,6 +222,24 @@ export default function MySidequests() {
     { label: 'Paused', value: SidequestStatus.PAUSED },
     { label: 'New', value: SidequestStatus.NOT_STARTED },
   ];
+
+  // Data is preloaded in index.tsx, so we don't need to show loading here
+  // Only show loading if there's an actual loading state and no data
+  if (isLoading && sidequests.length === 0) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.settingsRow}>
+          <Text style={styles.settingsTitle}>
+            {authUser?.displayName ? `${authUser.displayName}'s Sidequests` : 'My Sidequests'}
+          </Text>
+        </View>
+        <LoadingCard 
+          message="Loading your sidequests..."
+          height={400}
+        />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>

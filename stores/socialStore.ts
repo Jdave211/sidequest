@@ -6,6 +6,7 @@ interface FriendCircle {
   name: string;
   code: string;
   description?: string;
+  display_picture?: string;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -84,6 +85,7 @@ interface SocialStore {
   createCircle: (name: string, description?: string, userId?: string) => Promise<FriendCircle>;
   joinCircle: (code: string, userId?: string) => Promise<FriendCircle>;
   leaveCircle: (circleId: string, userId: string) => Promise<void>;
+  deleteSpace: (spaceId: string) => Promise<void>;
   generateNewCode: (circleId: string, userId: string) => Promise<string>;
   loadUserCircles: (userId: string) => Promise<void>;
 
@@ -174,7 +176,7 @@ export const useSocialStore = create<SocialStore>((set, get) => ({
   },
 
   // Create a new friend circle
-  createCircle: async (name: string, description?: string, userId?: string): Promise<FriendCircle> => {
+  createCircle: async (name: string, description?: string, displayPicture?: string, userId?: string): Promise<FriendCircle> => {
     
     try {
       get().setLoading(true);
@@ -240,6 +242,7 @@ export const useSocialStore = create<SocialStore>((set, get) => ({
           name,
           code,
           description,
+          display_picture: displayPicture || null,
           created_by: effectiveUserId,
         })
         .select()
@@ -334,6 +337,55 @@ export const useSocialStore = create<SocialStore>((set, get) => ({
       return circle;
     } catch (err) {
       get().setError(err instanceof Error ? err.message : 'Failed to join circle');
+      throw err;
+    } finally {
+      get().setLoading(false);
+    }
+  },
+
+  // Delete a space
+  deleteSpace: async (spaceId: string): Promise<void> => {
+    try {
+      get().setLoading(true);
+
+      // Get space details to check for display picture
+      const { data: space, error: spaceError } = await supabase
+        .from('friend_circles')
+        .select('display_picture')
+        .eq('id', spaceId)
+        .single();
+
+      if (spaceError) throw spaceError;
+
+      // Delete display picture from storage if it exists
+      if (space?.display_picture) {
+        const path = space.display_picture.split('/').pop(); // Get filename from URL
+        if (path) {
+          const { error: storageError } = await supabase.storage
+            .from('space-images')
+            .remove([path]);
+          if (storageError) {
+            console.error('[deleteSpace] Failed to delete display picture:', storageError);
+            // Continue with space deletion even if image deletion fails
+          }
+        }
+      }
+
+      // Call the delete_space function
+      const { error: deleteError } = await supabase
+        .rpc('delete_space', { space_id: spaceId });
+
+      if (deleteError) throw deleteError;
+
+      // Update local state
+      const { currentCircle, userCircles } = get();
+      if (currentCircle?.id === spaceId) {
+        get().setCurrentCircle(null);
+      }
+      set({ userCircles: userCircles.filter(c => c.id !== spaceId) });
+
+    } catch (err) {
+      get().setError(err instanceof Error ? err.message : 'Failed to delete space');
       throw err;
     } finally {
       get().setLoading(false);

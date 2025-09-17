@@ -2,17 +2,18 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-  Alert,
-  FlatList,
-  Image,
-  Modal,
-  RefreshControl,
-  SafeAreaView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    FlatList,
+    Image,
+    Modal,
+    RefreshControl,
+    SafeAreaView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { BorderRadius, Colors, ComponentSizes, Spacing, Typography } from '../constants/theme';
 import { supabase } from '../lib/supabase';
@@ -35,6 +36,7 @@ export const SpaceDetail: React.FC<SpaceDetailProps> = ({ spaceId, onBack }) => 
   const [currentSpace, setCurrentSpace] = useState<any>(null);
   const [activityFeed, setActivityFeed] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
   
   // Modal states
@@ -69,20 +71,20 @@ export const SpaceDetail: React.FC<SpaceDetailProps> = ({ spaceId, onBack }) => 
     
     setIsLoading(true);
     try {
-      // Load space details
-      const { data: spaceData, error: spaceError } = await supabase
-        .from('friend_circles')
-        .select('*')
-        .eq('id', spaceId)
-        .single();
+      // Load space details and activity feed in parallel
+      const [spaceResult, activityResult] = await Promise.all([
+        supabase
+          .from('friend_circles')
+          .select('*')
+          .eq('id', spaceId)
+          .single(),
+        loadActivityFeed(spaceId)
+      ]);
 
-      if (spaceError) throw spaceError;
+      if (spaceResult.error) throw spaceResult.error;
       
-      setCurrentSpace(spaceData);
-      setIsOwner(spaceData.created_by === authState.user.id);
-      
-      // Load activity feed for this space
-      await loadActivityFeed(spaceId);
+      setCurrentSpace(spaceResult.data);
+      setIsOwner(spaceResult.data.created_by === authState.user.id);
       
       // Get the activity feed from the store
       const { activityFeed: feed } = useSocialStore.getState();
@@ -186,25 +188,15 @@ export const SpaceDetail: React.FC<SpaceDetailProps> = ({ spaceId, onBack }) => 
   };
 
   const handleDeleteSpace = async () => {
-    if (!currentSpace || !authState.user) return;
+    if (!currentSpace) return;
     
     try {
-      const { error } = await supabase
-        .from('friend_circles')
-        .delete()
-        .eq('id', currentSpace.id)
-        .eq('created_by', authState.user.id);
-
-      if (error) throw error;
-
+      await useSocialStore.getState().deleteSpace(currentSpace.id);
       Alert.alert('Space Deleted', 'The space has been permanently deleted.', [
         { text: 'OK', onPress: () => router.back() }
       ]);
-      
-      // Reload user circles
-      await loadUserCircles(authState.user.id);
     } catch (error) {
-      Alert.alert('Error', 'Failed to delete space. Please try again.');
+      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to delete space. Please try again.');
     }
   };
 
@@ -246,13 +238,50 @@ export const SpaceDetail: React.FC<SpaceDetailProps> = ({ spaceId, onBack }) => 
     );
   };
 
-  const onRefresh = () => {
-    if (spaceId) {
-      loadSpaceData();
+  const onRefresh = async () => {
+    if (!spaceId) return;
+    
+    setIsRefreshing(true);
+    try {
+      // Load space details and activity feed in parallel
+      const [spaceResult, activityResult] = await Promise.all([
+        supabase
+          .from('friend_circles')
+          .select('*')
+          .eq('id', spaceId)
+          .single(),
+        loadActivityFeed(spaceId)
+      ]);
+
+      if (spaceResult.error) throw spaceResult.error;
+      
+      setCurrentSpace(spaceResult.data);
+      setIsOwner(spaceResult.data.created_by === authState.user?.id);
+      
+      // Get the activity feed from the store
+      const { activityFeed: feed } = useSocialStore.getState();
+      setActivityFeed(feed);
+      
+    } catch (error) {
+      console.error('Failed to refresh space data:', error);
+    } finally {
+      setIsRefreshing(false);
     }
   };
 
-  if (!currentSpace) {
+  // Show loading state while fetching initial data
+  if (isLoading && !currentSpace) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Show not found state if space doesn't exist
+  if (!currentSpace && !isLoading) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.emptyState}>
@@ -301,7 +330,12 @@ export const SpaceDetail: React.FC<SpaceDetailProps> = ({ spaceId, onBack }) => 
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
           refreshControl={
-            <RefreshControl refreshing={isLoading} onRefresh={onRefresh} />
+            <RefreshControl 
+              refreshing={isRefreshing} 
+              onRefresh={onRefresh}
+              tintColor={Colors.primary}
+              title={null}
+            />
           }
         />
       )}
@@ -457,22 +491,46 @@ export const SpaceDetail: React.FC<SpaceDetailProps> = ({ spaceId, onBack }) => 
           onPress={() => setShowDeleteModal(false)}
         >
           <View style={styles.deleteModal}>
+            <View style={styles.deleteIconContainer}>
+              <Ionicons name="warning" size={40} color={Colors.error} />
+            </View>
             <Text style={styles.deleteTitle}>Delete Space</Text>
             <Text style={styles.deleteMessage}>
-              Are you sure you want to delete "{currentSpace?.name}"? This action cannot be undone.
+              Are you sure you want to delete "{currentSpace?.name}"?
+            </Text>
+            <Text style={styles.deleteSubMessage}>
+              This will:
+            </Text>
+            <View style={styles.deleteEffectsList}>
+              <View style={styles.deleteEffectItem}>
+                <Ionicons name="people" size={20} color={Colors.textSecondary} />
+                <Text style={styles.deleteEffectText}>Remove all members from the space</Text>
+              </View>
+              <View style={styles.deleteEffectItem}>
+                <Ionicons name="list" size={20} color={Colors.textSecondary} />
+                <Text style={styles.deleteEffectText}>Unlink all sidequests from the space</Text>
+              </View>
+              <View style={styles.deleteEffectItem}>
+                <Ionicons name="trash" size={20} color={Colors.textSecondary} />
+                <Text style={styles.deleteEffectText}>Delete the space permanently</Text>
+              </View>
+            </View>
+            <Text style={styles.deleteWarning}>
+              This action cannot be undone.
             </Text>
             <View style={styles.deleteButtons}>
               <TouchableOpacity 
                 style={[styles.deleteButton, styles.cancelDeleteButton]} 
                 onPress={() => setShowDeleteModal(false)}
               >
-                <Text style={styles.cancelDeleteButtonText}>Cancel</Text>
+                <Text style={styles.cancelDeleteButtonText}>Keep Space</Text>
               </TouchableOpacity>
               <TouchableOpacity 
                 style={[styles.deleteButton, styles.confirmDeleteButton]} 
                 onPress={handleDeleteSpace}
               >
-                <Text style={styles.confirmDeleteButtonText}>Delete</Text>
+                <Ionicons name="trash-outline" size={20} color={Colors.white} style={styles.deleteButtonIcon} />
+                <Text style={styles.confirmDeleteButtonText}>Delete Space</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -729,30 +787,79 @@ const styles = StyleSheet.create({
     margin: Spacing.xl,
     borderRadius: BorderRadius.lg,
     padding: Spacing.xl,
+    maxWidth: 400,
+    width: '90%',
+    alignSelf: 'center',
+  },
+  deleteIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: Colors.error + '10', // 10% opacity
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.lg,
+    alignSelf: 'center',
   },
   deleteTitle: {
     fontSize: Typography.fontSize['2xl'],
     fontWeight: Typography.fontWeight.bold,
     color: Colors.error,
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.sm,
     textAlign: 'center',
   },
   deleteMessage: {
+    fontSize: Typography.fontSize.lg,
+    color: Colors.textPrimary,
+    textAlign: 'center',
+    marginBottom: Spacing.lg,
+    lineHeight: 24,
+    fontWeight: Typography.fontWeight.medium,
+  },
+  deleteSubMessage: {
     fontSize: Typography.fontSize.base,
     color: Colors.textSecondary,
+    marginBottom: Spacing.sm,
+    fontWeight: Typography.fontWeight.medium,
+  },
+  deleteEffectsList: {
+    backgroundColor: Colors.background,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.lg,
+    marginBottom: Spacing.lg,
+  },
+  deleteEffectItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+    gap: Spacing.sm,
+  },
+  deleteEffectText: {
+    fontSize: Typography.fontSize.base,
+    color: Colors.textSecondary,
+    flex: 1,
+  },
+  deleteWarning: {
+    fontSize: Typography.fontSize.sm,
+    color: Colors.error,
     textAlign: 'center',
     marginBottom: Spacing.xl,
-    lineHeight: 20,
+    fontWeight: Typography.fontWeight.medium,
   },
   deleteButtons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    gap: Spacing.md,
   },
   deleteButton: {
     flex: 1,
     paddingVertical: Spacing.md,
     borderRadius: BorderRadius.md,
-    marginHorizontal: Spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteButtonIcon: {
+    marginRight: Spacing.xs,
   },
   cancelDeleteButton: {
     backgroundColor: Colors.background,
@@ -760,18 +867,19 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
   },
   cancelDeleteButtonText: {
-    textAlign: 'center',
     fontSize: Typography.fontSize.base,
-    color: Colors.textSecondary,
+    color: Colors.textPrimary,
+    fontWeight: Typography.fontWeight.medium,
   },
   confirmDeleteButton: {
     backgroundColor: Colors.error,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   confirmDeleteButtonText: {
-    textAlign: 'center',
     fontSize: Typography.fontSize.base,
     color: Colors.white,
-    fontWeight: Typography.fontWeight.medium,
+    fontWeight: Typography.fontWeight.bold,
   },
   membersModal: {
     backgroundColor: Colors.white,
@@ -789,7 +897,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   loadingContainer: {
-    padding: Spacing.xl,
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
   },
   emptyMembers: {

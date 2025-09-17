@@ -1,11 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import {
-  FlatList,
-  RefreshControl,
-  StyleSheet,
-  Text,
-  View
+    FlatList,
+    RefreshControl,
+    StyleSheet,
+    Text,
+    View
 } from 'react-native';
 import { Colors, ComponentSizes, Spacing, Typography } from '../constants/theme';
 import { useSocialStore } from '../stores';
@@ -49,7 +49,12 @@ export default function ActivityFeed({ onRefresh }: ActivityFeedProps) {
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
           refreshControl={
-            <RefreshControl refreshing={isLoading} onRefresh={onRefresh} />
+            <RefreshControl 
+              refreshing={isLoading} 
+              onRefresh={onRefresh}
+              tintColor={Colors.primary}
+              title={null}
+            />
           }
         />
       )}

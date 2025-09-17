@@ -1,11 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
+import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import React, { useState } from 'react';
 import {
   Alert,
   FlatList,
+  Image,
   Keyboard,
   Pressable,
   RefreshControl,
@@ -13,10 +15,11 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
 import { BorderRadius, Colors, ComponentSizes, Shadows, Spacing, Typography } from '../constants/theme';
 import { useSocialStore, useUserStore } from '../stores';
+import { uploadImageToSupabase } from '../utils/imageUpload';
 import SpaceCard from './SpaceCard';
 
 
@@ -40,6 +43,8 @@ export default function MySpaces({ onRefresh }: MySpacesProps) {
   const [joinCode, setJoinCode] = useState('');
   const [circleName, setCircleName] = useState('');
   const [circleDescription, setCircleDescription] = useState('');
+  const [displayPicture, setDisplayPicture] = useState<string | undefined>(undefined);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchExpanded, setSearchExpanded] = useState(false);
 
   const copyToClipboard = async (text: string, message: string) => {
@@ -87,6 +92,28 @@ export default function MySpaces({ onRefresh }: MySpacesProps) {
     }
   };
 
+  const pickImage = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        setDisplayPicture(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
+      Alert.alert('Error', 'Failed to pick image');
+    }
+  };
+
+  const removeImage = () => {
+    setDisplayPicture(undefined);
+  };
+
   const handleCreateCircle = async () => {
     if (!circleName.trim()) {
       Alert.alert('Error', 'Please enter a circle name');
@@ -94,9 +121,30 @@ export default function MySpaces({ onRefresh }: MySpacesProps) {
     }
 
     try {
-      const newCircle = await createCircle(circleName.trim(), circleDescription.trim() || undefined, authState.user?.id);
+      setIsSubmitting(true);
+
+      // Upload display picture if selected
+      let displayPictureUrl: string | undefined;
+      if (displayPicture) {
+        try {
+          const uploadResult = await uploadImageToSupabase(displayPicture, 'space-images');
+          displayPictureUrl = uploadResult.url;
+          console.log('[CreateSpace] Display picture uploaded:', displayPictureUrl);
+        } catch (error) {
+          console.error('[CreateSpace] Display picture upload failed:', error);
+          Alert.alert('Warning', 'Failed to upload display picture, but space will be created without it.');
+        }
+      }
+
+      const newCircle = await createCircle(
+        circleName.trim(), 
+        circleDescription.trim() || undefined, 
+        displayPictureUrl
+      );
+
       setCircleName('');
       setCircleDescription('');
+      setDisplayPicture(undefined);
       setShowCreateForm(false);
       Alert.alert(
         'Space Created', 
@@ -115,6 +163,8 @@ export default function MySpaces({ onRefresh }: MySpacesProps) {
       );
     } catch (error) {
       Alert.alert('Error', error instanceof Error ? error.message : 'Failed to create circle');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -212,7 +262,12 @@ export default function MySpaces({ onRefresh }: MySpacesProps) {
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
           refreshControl={
-            <RefreshControl refreshing={isLoading} onRefresh={onRefresh} />
+            <RefreshControl 
+              refreshing={isLoading} 
+              onRefresh={onRefresh}
+              tintColor={Colors.primary}
+              title={null}
+            />
           }
         />
       )}
@@ -261,8 +316,26 @@ export default function MySpaces({ onRefresh }: MySpacesProps) {
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Create a Space</Text>
             <Text style={styles.modalDescription}>
-              Give your space a name and optional description
+              Give your space a name, description, and optional display picture
             </Text>
+
+            {/* Display Picture Section */}
+            <View style={styles.imageContainer}>
+              {displayPicture ? (
+                <View style={styles.imageWrapper}>
+                  <Image source={{ uri: displayPicture }} style={styles.previewImage} />
+                  <TouchableOpacity style={styles.removeImageBtn} onPress={removeImage}>
+                    <Ionicons name="close-circle" size={24} color="#FF3B30" />
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TouchableOpacity style={styles.imagePlaceholder} onPress={pickImage}>
+                  <Ionicons name="camera" size={32} color={Colors.textTertiary} />
+                  <Text style={styles.imagePlaceholderText}>Add Photo</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
             <TextInput
               style={styles.modalInput}
               value={circleName}
@@ -288,6 +361,7 @@ export default function MySpaces({ onRefresh }: MySpacesProps) {
                   setShowCreateForm(false);
                   setCircleName('');
                   setCircleDescription('');
+                  setDisplayPicture(undefined);
                 }}
               >
                 <Text style={styles.secondaryButtonText}>Cancel</Text>
@@ -479,6 +553,43 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 400,
     ...Shadows.lg,
+  },
+  imageContainer: {
+    alignItems: 'center',
+    marginBottom: Spacing.lg,
+  },
+  imageWrapper: {
+    position: 'relative',
+  },
+  previewImage: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: Colors.border,
+  },
+  removeImageBtn: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    backgroundColor: Colors.white,
+    borderRadius: 12,
+  },
+  imagePlaceholder: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: Colors.border,
+    borderWidth: 2,
+    borderColor: Colors.textTertiary,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.xs,
+  },
+  imagePlaceholderText: {
+    fontSize: Typography.fontSize.sm,
+    color: Colors.textTertiary,
+    fontWeight: Typography.fontWeight.medium,
   },
   modalTitle: {
     fontSize: Typography.fontSize.xl,

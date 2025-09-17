@@ -1,21 +1,65 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
-import { Colors } from '../constants/theme';
-import { useUserStore } from '../stores';
+import LoadingScreen from '../components/LoadingScreen';
+import { useSidequestStore, useSocialStore, useUserStore } from '../stores';
 
 export default function Index() {
   const router = useRouter();
   const authState = useUserStore((state) => state.authState);
   const isOnboardingComplete = useUserStore((state) => state.isOnboardingComplete);
+  const loadUserSidequests = useSidequestStore((state) => state.loadUserSidequests);
+  const loadUserCircles = useSocialStore((state) => state.loadUserCircles);
+  const loadGlobalActivityFeed = useSocialStore((state) => state.loadGlobalActivityFeed);
+  
   const [isMounted, setIsMounted] = useState(false);
+  const [minLoadingComplete, setMinLoadingComplete] = useState(false);
+  const [dataPreloaded, setDataPreloaded] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
+    
+    // Set minimum loading time of 2 seconds
+    const minLoadingTimer = setTimeout(() => {
+      setMinLoadingComplete(true);
+    }, 2000);
+    
+    return () => clearTimeout(minLoadingTimer);
   }, []);
 
+  // Preload all data when user is authenticated
   useEffect(() => {
-    if (isMounted && !authState.isLoading) {
+    if (authState.user && !dataPreloaded) {
+      console.log('Preloading data for user:', authState.user.id);
+      
+      const preloadData = async () => {
+        try {
+          // Load all data in parallel
+          await Promise.all([
+            loadUserSidequests(authState.user.id),
+            loadUserCircles(authState.user.id),
+          ]);
+          
+          // After circles are loaded, load activity feed
+          const socialStore = useSocialStore.getState();
+          const circleIds = socialStore.userCircles.map(c => c.id);
+          if (circleIds.length > 0) {
+            await loadGlobalActivityFeed(circleIds);
+          }
+          
+          console.log('Data preloading complete');
+          setDataPreloaded(true);
+        } catch (error) {
+          console.error('Error preloading data:', error);
+          setDataPreloaded(true); // Continue anyway
+        }
+      };
+      
+      preloadData();
+    }
+  }, [authState.user, dataPreloaded, loadUserSidequests, loadUserCircles, loadGlobalActivityFeed]);
+
+  useEffect(() => {
+    if (isMounted && !authState.isLoading && minLoadingComplete && dataPreloaded) {
       // Add a small delay to ensure the layout is fully mounted
       const timer = setTimeout(() => {
         console.log('Navigation check:', {
@@ -25,7 +69,8 @@ export default function Index() {
           hasCompletedWelcome: authState.onboardingState.hasCompletedWelcome,
           isSignedIn: authState.onboardingState.isSignedIn,
           hasCompletedProfile: authState.onboardingState.hasCompletedProfile,
-          isOnboardingComplete: isOnboardingComplete()
+          isOnboardingComplete: isOnboardingComplete(),
+          dataPreloaded
         });
 
         // AUTHENTICATION GUARD: Only allow access if user is actually signed in
@@ -53,17 +98,13 @@ export default function Index() {
       
       return () => clearTimeout(timer);
     }
-  }, [isMounted, router, authState, isOnboardingComplete]);
+  }, [isMounted, router, authState, isOnboardingComplete, minLoadingComplete, dataPreloaded]);
 
-  // Show loading spinner while checking authentication
+  // Show loading screen while checking authentication
   return (
-    <View style={{ 
-      flex: 1, 
-      backgroundColor: Colors.background,
-      justifyContent: 'center',
-      alignItems: 'center'
-    }}>
-      <ActivityIndicator size="large" color={Colors.primary} />
-    </View>
+    <LoadingScreen 
+      message="Initializing Sidequest..."
+      showLogo={true}
+    />
   );
 } 

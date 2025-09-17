@@ -17,32 +17,32 @@ type SocialTab = 'spaces' | 'feed';
 export default function Social() {
   const authState = useUserStore((state) => state.authState);
   const userCircles = useSocialStore((state) => state.userCircles);
+  const isLoading = useSocialStore((state) => state.isLoading);
   const loadActivityFeed = useSocialStore((state) => state.loadActivityFeed);
   const loadGlobalActivityFeed = useSocialStore((state) => state.loadGlobalActivityFeed);
   const loadUserCircles = useSocialStore((state) => state.loadUserCircles);
   
   const [activeTab, setActiveTab] = useState<SocialTab>('feed');
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
 
-  // Load user circles when user changes
+  // Data is preloaded in index.tsx, so we just need to set initial load to false
   useEffect(() => {
     if (authState.user) {
-      loadUserCircles(authState.user.id);
+      // Data should already be loaded from index.tsx
+      setIsInitialLoad(false);
     }
-  }, [authState.user, loadUserCircles]);
+  }, [authState.user]);
 
-  // Load global activity feed from all user's spaces
-  useEffect(() => {
+  const onRefreshFeed = () => {
     if (authState.user) {
       const ids = userCircles.map(c => c.id);
       loadGlobalActivityFeed(ids);
     }
-  }, [authState.user, userCircles, loadGlobalActivityFeed]);
+  };
 
-  const onRefresh = () => {
+  const onRefreshSpaces = () => {
     if (authState.user) {
       loadUserCircles(authState.user.id);
-      const ids = userCircles.map(c => c.id);
-      loadGlobalActivityFeed(ids);
     }
   };
 
@@ -59,6 +59,8 @@ export default function Social() {
       </SafeAreaView>
     );
   }
+
+  // Remove full-screen loading state
 
   return (
     <SafeAreaView style={styles.container}>
@@ -103,9 +105,9 @@ export default function Social() {
       {/* Content */}
       <View style={[styles.contentContainer, activeTab === 'spaces' && styles.spacesBackground]}>
       {activeTab === 'spaces' ? (
-          <MySpaces onRefresh={onRefresh} />
+          <MySpaces onRefresh={onRefreshSpaces} />
         ) : (
-          <ActivityFeed onRefresh={onRefresh} />
+          <ActivityFeed onRefresh={onRefreshFeed} />
         )}
       </View>
     </SafeAreaView>
