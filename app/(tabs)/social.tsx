@@ -1,4 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
+import { useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   SafeAreaView,
@@ -9,6 +11,7 @@ import {
 } from 'react-native';
 import ActivityFeed from '../../components/ActivityFeed';
 import MySpaces from '../../components/MySpaces';
+import QuoteScreen from '../../components/QuoteScreen';
 import { Colors, ComponentSizes, Spacing, Typography } from '../../constants/theme';
 import { useSocialStore, useUserStore } from '../../stores';
 
@@ -21,17 +24,37 @@ export default function Social() {
   const loadActivityFeed = useSocialStore((state) => state.loadActivityFeed);
   const loadGlobalActivityFeed = useSocialStore((state) => state.loadGlobalActivityFeed);
   const loadUserCircles = useSocialStore((state) => state.loadUserCircles);
+  const setLoading = useSocialStore((state) => state.setLoading);
   
+  const { showQuotes } = useLocalSearchParams<{ showQuotes?: string }>();
   const [activeTab, setActiveTab] = useState<SocialTab>('feed');
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [showQuoteScreen, setShowQuoteScreen] = useState(showQuotes === 'true');
+  const [dataPreloaded, setDataPreloaded] = useState(false);
 
-  // Data is preloaded in index.tsx, so we just need to set initial load to false
+  // Load circles and activity feed after sign-in (quote overlay is purely visual)
   useEffect(() => {
     if (authState.user) {
-      // Data should already be loaded from index.tsx
+      const loadData = async () => {
+        try {
+          setLoading(true);
+          await loadUserCircles(authState.user?.id || '');
+          const circles = useSocialStore.getState().userCircles;
+          if (circles.length > 0) {
+            await loadGlobalActivityFeed(circles.map(c => c.id));
+          }
+          setDataPreloaded(true);
+        } catch (error) {
+          console.error('Error loading data:', error);
+          setDataPreloaded(true);
+        } finally {
+          setLoading(false);
+        }
+      };
+      loadData();
       setIsInitialLoad(false);
     }
-  }, [authState.user]);
+  }, [authState.user, loadUserCircles, loadGlobalActivityFeed]);
 
   const onRefreshFeed = () => {
     if (authState.user) {
@@ -46,6 +69,39 @@ export default function Social() {
     }
   };
 
+  // When tab switches to 'feed', ensure we load the global feed (not last opened space)
+  React.useEffect(() => {
+    if (authState.user && activeTab === 'feed') {
+      const ids = userCircles.map(c => c.id);
+      (async () => {
+        try {
+          setLoading(true);
+          await loadGlobalActivityFeed(ids);
+        } finally {
+          setLoading(false);
+        }
+      })();
+    }
+  }, [activeTab, authState.user, userCircles, loadGlobalActivityFeed]);
+
+  // Also refresh global feed whenever this screen regains focus
+  useFocusEffect(
+    React.useCallback(() => {
+      if (authState.user && activeTab === 'feed') {
+        const ids = useSocialStore.getState().userCircles.map(c => c.id);
+        (async () => {
+          try {
+            setLoading(true);
+            await loadGlobalActivityFeed(ids);
+          } finally {
+            setLoading(false);
+          }
+        })();
+      }
+      return () => {};
+    }, [authState.user, activeTab, loadGlobalActivityFeed])
+  );
+
   if (!authState.user) {
     return (
       <SafeAreaView style={styles.container}>
@@ -54,9 +110,19 @@ export default function Social() {
           <Text style={styles.emptyTitle}>Sign In Required</Text>
           <Text style={styles.emptyDescription}>
             Please sign in to access social features and join friend circles.
-        </Text>
+          </Text>
         </View>
       </SafeAreaView>
+    );
+  }
+
+  // Show quote screen while loading data after sign-in
+  if (showQuoteScreen && !dataPreloaded) {
+    return (
+      <QuoteScreen
+        onComplete={() => setShowQuoteScreen(false)}
+        duration={2500}
+      />
     );
   }
 

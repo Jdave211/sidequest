@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
-import { Sidequest, SidequestCategory, SidequestStatus } from '../types/sidequest';
+import { Sidequest, SidequestCategory } from '../types/sidequest';
 
 interface SidequestStore {
   // State
@@ -11,7 +11,7 @@ interface SidequestStore {
   // Actions
   loadUserSidequests: (userId: string) => Promise<void>;
   addSidequest: (
-    sidequest: Omit<Sidequest, 'id' | 'createdAt' | 'updatedAt'>,
+    sidequest: Omit<Sidequest, 'id' | 'created_at' | 'updated_at'>,
     userId: string,
     extra?: { image_urls?: string[]; location?: string }
   ) => Promise<void>;
@@ -19,7 +19,6 @@ interface SidequestStore {
   deleteSidequest: (id: string) => Promise<void>; // Delete completely from everywhere
   removeSidequestFromSpace: (id: string, spaceId: string) => Promise<void>; // Remove from specific space only
   getSidequestById: (id: string) => Sidequest | undefined;
-  getSidequestsByStatus: (status: SidequestStatus) => Sidequest[];
   getSidequestsByCategory: (category: SidequestCategory) => Sidequest[];
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
@@ -41,33 +40,34 @@ export const useSidequestStore = create<SidequestStore>((set, get) => ({
       get().setLoading(true);
       get().setError(null);
       
+      console.log('[SidequestStore] Querying sidequests for user:', userId);
+      
       const { data, error } = await supabase
         .from('sidequest_activities')
-        .select('id, user_id, title, description, category, difficulty, status, review, image_urls, location, created_at, updated_at')
+        .select('id, user_id, title, description, category, review, image_urls, location, created_at, updated_at')
         .eq('user_id', userId)
         .order('created_at', { ascending: false });
 
+      console.log('[SidequestStore] Raw database response:', { data, error, dataLength: data?.length });
+
       if (error) throw error;
 
-      // Map social sidequests to personal sidequest format
+      // Map to simplified sidequest format
       const sidequests: Sidequest[] = (data || []).map((item: any) => ({
         id: item.id,
         title: item.title,
         description: item.description || '',
         category: mapCategory(item.category),
-        difficulty: mapDifficulty(item.difficulty),
-        estimatedTime: 'Unknown',
-        status: mapStatus(item.status),
-        tags: [],
-        createdAt: new Date(item.created_at),
-        updatedAt: new Date(item.updated_at || item.created_at),
-        completedAt: undefined,
-        progress: item.status === 'completed' ? 100 : item.status === 'in_progress' ? 50 : 0,
-        notes: item.review || undefined,
+        location: item.location,
+        image_urls: item.image_urls,
+        review: item.review,
+        created_at: item.created_at,
+        updated_at: item.updated_at || item.created_at,
       }));
 
       set({ sidequests });
       console.log(`[SidequestStore] Loaded ${sidequests.length} sidequests for user ${userId}`);
+      console.log('[SidequestStore] Sample sidequest data:', sidequests[0]);
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to load sidequests';
       get().setError(errorMsg);
@@ -78,7 +78,7 @@ export const useSidequestStore = create<SidequestStore>((set, get) => ({
   },
 
   // Add new sidequest to Supabase
-  addSidequest: async (sidequestData: Omit<Sidequest, 'id' | 'createdAt' | 'updatedAt'>, userId: string, extra?: { image_urls?: string[]; location?: string }) => {
+  addSidequest: async (sidequestData: Omit<Sidequest, 'id' | 'created_at' | 'updated_at'>, userId: string, extra?: { image_urls?: string[]; location?: string }) => {
     try {
       const { data, error } = await supabase
         .from('sidequest_activities')
@@ -87,11 +87,9 @@ export const useSidequestStore = create<SidequestStore>((set, get) => ({
           title: sidequestData.title,
           description: sidequestData.description,
           category: (sidequestData.category as unknown as string)?.toLowerCase?.() || sidequestData.category,
-          difficulty: (sidequestData.difficulty as unknown as string)?.toLowerCase?.() || sidequestData.difficulty,
-          status: mapStatusToDb(sidequestData.status),
-          review: sidequestData.notes,
-          image_urls: extra?.image_urls || null,
-          location: extra?.location || null,
+          review: sidequestData.review,
+          image_urls: extra?.image_urls || sidequestData.image_urls || null,
+          location: extra?.location || sidequestData.location || null,
         })
         .select()
         .single();
@@ -115,8 +113,9 @@ export const useSidequestStore = create<SidequestStore>((set, get) => ({
       
       if (updates.title) updateData.title = updates.title;
       if (updates.description !== undefined) updateData.description = updates.description;
-      if (updates.status) updateData.status = mapStatusToDb(updates.status);
-      if (updates.notes !== undefined) updateData.review = updates.notes;
+      if (updates.review !== undefined) updateData.review = updates.review;
+      if (updates.location !== undefined) updateData.location = updates.location;
+      if (updates.image_urls !== undefined) updateData.image_urls = updates.image_urls;
       // updated_at handled by DB trigger or we rely on default behavior
 
       const { error } = await supabase
@@ -130,7 +129,7 @@ export const useSidequestStore = create<SidequestStore>((set, get) => ({
     set((state) => ({
       sidequests: state.sidequests.map(sidequest => 
         sidequest.id === id 
-          ? { ...sidequest, ...updates, updatedAt: new Date() }
+          ? { ...sidequest, ...updates, updated_at: new Date().toISOString() }
           : sidequest
       )
     }));
@@ -253,10 +252,6 @@ export const useSidequestStore = create<SidequestStore>((set, get) => ({
     return get().sidequests.find(sidequest => sidequest.id === id);
   },
 
-  getSidequestsByStatus: (status: SidequestStatus) => {
-    return get().sidequests.filter(sidequest => sidequest.status === status);
-  },
-
   getSidequestsByCategory: (category: SidequestCategory) => {
     return get().sidequests.filter(sidequest => sidequest.category === category);
   },
@@ -277,33 +272,4 @@ function mapCategory(dbCategory: string): SidequestCategory {
     'other': SidequestCategory.OTHER
   };
   return categoryMap[dbCategory] || SidequestCategory.OTHER;
-}
-
-function mapDifficulty(dbDifficulty: string): any {
-  const difficultyMap: Record<string, any> = {
-    'easy': 'Easy',
-    'medium': 'Medium',
-    'hard': 'Hard'
-  };
-  return difficultyMap[dbDifficulty] || 'Easy';
-}
-
-function mapStatus(dbStatus: string): SidequestStatus {
-  const statusMap: Record<string, SidequestStatus> = {
-    'not_started': SidequestStatus.NOT_STARTED,
-    'in_progress': SidequestStatus.IN_PROGRESS,
-    'completed': SidequestStatus.COMPLETED
-  };
-  return statusMap[dbStatus] || SidequestStatus.NOT_STARTED;
-}
-
-function mapStatusToDb(status: SidequestStatus): string {
-  const statusMap: Record<SidequestStatus, string> = {
-    [SidequestStatus.NOT_STARTED]: 'not_started',
-    [SidequestStatus.IN_PROGRESS]: 'in_progress',
-    [SidequestStatus.COMPLETED]: 'completed',
-    [SidequestStatus.PAUSED]: 'in_progress',
-    [SidequestStatus.ABANDONED]: 'not_started'
-  };
-  return statusMap[status] || 'not_started';
 }

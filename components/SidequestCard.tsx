@@ -12,7 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { BackgroundTextures, BorderRadius, Colors, Shadows, Spacing, Typography } from '../constants/theme';
+import { BackgroundTextures, BorderRadius, Colors, Spacing, Typography } from '../constants/theme';
 
 // Stock images for sidequests
 const SIDEQUEST_STOCK_IMAGES = [
@@ -167,6 +167,8 @@ export default function SidequestCard({ item, spaceName, onPress, onRemove, show
 
       {/* Content */}
       <View style={styles.listingContent}>
+        {/* Subtle paper texture only on the white content area */}
+        <View style={[StyleSheet.absoluteFillObject, styles.contentTexture]} pointerEvents="none" />
         {/* Title and Location */}
         <View style={styles.titleRow}>
           <Text style={styles.listingTitle} numberOfLines={1}>
@@ -278,7 +280,7 @@ export default function SidequestCard({ item, spaceName, onPress, onRemove, show
                       <Text style={styles.sectionLabel}>Location</Text>
                       <View style={styles.locationRow}>
                         <Ionicons name="location-outline" size={16} color={Colors.textSecondary} />
-                        <Text style={styles.locationText} numberOfLines={2}>{locationText}</Text>
+                        <Text style={styles.modalLocationText} numberOfLines={2}>{locationText}</Text>
                       </View>
                     </View>
                   ) : null}
@@ -337,7 +339,18 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.lg,
     marginBottom: Spacing.lg,
     overflow: 'hidden',
-    ...Shadows.md,
+    // Subtle card shadow/border
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)',
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 6,
+  },
+  contentTexture: {
+    ...BackgroundTextures.paper,
+    opacity: 0.12,
   },
   
   // Image container with overlay badge
@@ -367,6 +380,7 @@ const styles = StyleSheet.create({
   // Content section
   listingContent: {
     padding: Spacing.lg,
+    backgroundColor: '#FAF9F6',
   },
   titleRow: {
     flexDirection: 'row',
@@ -540,7 +554,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.xs,
   },
-  locationText: {
+  
+  modalLocationText: {
     color: Colors.textPrimary,
     fontSize: Typography.fontSize.base,
     lineHeight: Typography.lineHeight.base,

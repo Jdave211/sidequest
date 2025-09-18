@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import LoadingScreen from '../components/LoadingScreen';
+import { View } from 'react-native';
 import { useSidequestStore, useSocialStore, useUserStore } from '../stores';
 
 export default function Index() {
@@ -14,55 +14,21 @@ export default function Index() {
   const loadGlobalActivityFeed = useSocialStore((state) => state.loadGlobalActivityFeed);
   
   const [isMounted, setIsMounted] = useState(false);
-  const [minLoadingComplete, setMinLoadingComplete] = useState(false);
-  const [dataPreloaded, setDataPreloaded] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
-    
-    // Set minimum loading time of 2 seconds
-    const minLoadingTimer = setTimeout(() => {
-      setMinLoadingComplete(true);
-    }, 2000);
-    
-    return () => clearTimeout(minLoadingTimer);
   }, []);
 
-  // Preload all data when user is authenticated
+  // Initialize data layer when user is authenticated
   useEffect(() => {
-    if (authState.user && !dataPreloaded) {
-      console.log('Preloading data for user:', authState.user.id);
-      
-      const preloadData = async () => {
-        try {
-          // Load all data in parallel
-          await Promise.all([
-            loadUserSidequests(authState.user.id),
-            initDataLayer(authState.user.id),
-          ]);
-          
-          // After circles are loaded, load activity feed
-          const socialStore = useSocialStore.getState();
-          const circleIds = socialStore.userCircles.map(c => c.id);
-          if (circleIds.length > 0) {
-            await loadGlobalActivityFeed(circleIds);
-          }
-          
-          console.log('Data preloading complete');
-          setDataPreloaded(true);
-        } catch (error) {
-          console.error('Error preloading data:', error);
-          setDataPreloaded(true); // Continue anyway
-        }
-      };
-      
-      preloadData();
+    if (authState.user) {
+      initDataLayer(authState.user.id);
     }
     return () => { if (authState.user) teardownDataLayer(); };
-  }, [authState.user, dataPreloaded, loadUserSidequests, loadUserCircles, loadGlobalActivityFeed]);
+  }, [authState.user]);
 
   useEffect(() => {
-    if (isMounted && !authState.isLoading && minLoadingComplete && dataPreloaded) {
+    if (isMounted && !authState.isLoading) {
       // Add a small delay to ensure the layout is fully mounted
       const timer = setTimeout(() => {
         console.log('Navigation check:', {
@@ -72,8 +38,7 @@ export default function Index() {
           hasCompletedWelcome: authState.onboardingState.hasCompletedWelcome,
           isSignedIn: authState.onboardingState.isSignedIn,
           hasCompletedProfile: authState.onboardingState.hasCompletedProfile,
-          isOnboardingComplete: isOnboardingComplete(),
-          dataPreloaded
+          isOnboardingComplete: isOnboardingComplete()
         });
 
         // AUTHENTICATION GUARD: Only allow access if user is actually signed in
@@ -101,13 +66,8 @@ export default function Index() {
       
       return () => clearTimeout(timer);
     }
-  }, [isMounted, router, authState, isOnboardingComplete, minLoadingComplete, dataPreloaded]);
+  }, [isMounted, router, authState, isOnboardingComplete]);
 
-  // Show loading screen while checking authentication
-  return (
-    <LoadingScreen 
-      message="Initializing Sidequest..."
-      showLogo={true}
-    />
-  );
+  // Show empty view while checking authentication
+  return <View />;
 } 

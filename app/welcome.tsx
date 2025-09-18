@@ -4,17 +4,17 @@ import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Animated,
-  Dimensions,
-  ImageBackground,
-  Platform,
-  SafeAreaView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    Animated,
+    Dimensions,
+    ImageBackground,
+    Platform,
+    SafeAreaView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { BorderRadius, Colors, ComponentSizes, Shadows, Spacing, Typography } from '../constants/theme';
 import { supabase } from '../lib/supabase';
@@ -112,8 +112,8 @@ export default function Welcome() {
     try {
       await signInWithGoogle();
       completeWelcome();
-      // Let route guards decide the next screen
-      router.replace('/');
+      // Navigate to quote screen after sign in
+      router.replace('/(tabs)/social?showQuotes=true');
     } catch (error) {
       console.error('Google sign-in error:', error);
       Alert.alert('Error', 'Failed to sign in with Google. Please try again.');
@@ -137,6 +137,9 @@ export default function Welcome() {
         return;
       }
       await useUserStore.getState().signInWithApple();
+      completeWelcome();
+      // Navigate to quote screen after sign in
+      router.replace('/(tabs)/social?showQuotes=true');
     } catch (err) {
       console.error('Apple sign-in error (fallback handler):', err);
       Alert.alert('Sign In Error', 'Failed to sign in with Apple. Please try again.');

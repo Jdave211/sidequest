@@ -3,15 +3,11 @@ export interface Sidequest {
   title: string;
   description: string;
   category: SidequestCategory;
-  difficulty: SidequestDifficulty;
-  estimatedTime: string; // e.g., "2 hours", "1 week"
-  status: SidequestStatus;
-  tags: string[];
-  createdAt: Date;
-  updatedAt: Date;
-  completedAt?: Date;
-  notes?: string;
-  progress?: number; // 0-100
+  location?: string;
+  image_urls?: string[];
+  review?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export enum SidequestCategory {
@@ -26,31 +22,3 @@ export enum SidequestCategory {
   HEALTH = "Health",
   OTHER = "Other"
 }
-
-export enum SidequestDifficulty {
-  EASY = "Easy",
-  MEDIUM = "Medium", 
-  HARD = "Hard",
-  EXPERT = "Expert"
-}
-
-export enum SidequestStatus {
-  NOT_STARTED = "Not Started",
-  IN_PROGRESS = "In Progress",
-  COMPLETED = "Completed",
-  PAUSED = "Paused",
-  ABANDONED = "Abandoned"
-}
-
-export interface SidequestTemplate {
-  id: string;
-  title: string;
-  description: string;
-  category: SidequestCategory;
-  difficulty: SidequestDifficulty;
-  estimatedTime: string;
-  tags: string[];
-  tips?: string[];
-  image?: string; // Emoji or image URL
-  braggingPoints?: string; // What you can brag about after completing
-} 

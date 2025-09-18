@@ -153,23 +153,37 @@ export const useSocialStore = create<SocialStore>((set, get) => ({
     }
     // Fetch fresh data in background
     await get().loadUserCircles(userId);
+    const initialIds = get().userCircles.map(c => c.id);
+    if (initialIds.length > 0) {
+      await get().loadGlobalActivityFeed(initialIds);
+    } else {
+      set({ activityFeed: [] });
+    }
 
     // Periodic background refetch
     if (!bgInterval) {
-      bgInterval = setInterval(() => {
+      bgInterval = setInterval(async () => {
         if (!currentUserId) return;
-        get().loadUserCircles(currentUserId);
-        const circle = get().currentCircle;
-        if (circle) get().loadActivityFeed(circle.id);
+        await get().loadUserCircles(currentUserId);
+        const ids = get().userCircles.map(c => c.id);
+        if (ids.length > 0) {
+          await get().loadGlobalActivityFeed(ids);
+        } else {
+          set({ activityFeed: [] });
+        }
       }, 30000); // 30s
     }
     // Refetch on foreground
     if (!appStateSub) {
-      const sub = AppState.addEventListener('change', (state) => {
+      const sub = AppState.addEventListener('change', async (state) => {
         if (state === 'active' && currentUserId) {
-          get().loadUserCircles(currentUserId);
-          const circle = get().currentCircle;
-          if (circle) get().loadActivityFeed(circle.id);
+          await get().loadUserCircles(currentUserId);
+          const ids = get().userCircles.map(c => c.id);
+          if (ids.length > 0) {
+            await get().loadGlobalActivityFeed(ids);
+          } else {
+            set({ activityFeed: [] });
+          }
         }
       });
       appStateSub = { remove: () => sub.remove() };
@@ -727,7 +741,7 @@ export const useSocialStore = create<SocialStore>((set, get) => ({
   loadGlobalActivityFeed: async (circleIds: string[]): Promise<void> => {
     try {
       if (!circleIds || circleIds.length === 0) {
-        set({ activityFeed: [] });
+        // Do not clear existing feed abruptly; keep last known
         return;
       }
       // Collect IDs from circles
@@ -738,7 +752,10 @@ export const useSocialStore = create<SocialStore>((set, get) => ({
       if (circlesError) { console.warn('[loadGlobalActivityFeed] circles error', circlesError); throw circlesError; }
 
       const allIds = Array.from(new Set((circles || []).flatMap((c: any) => c.sidequest_ids || [])));
-      if (allIds.length === 0) { set({ activityFeed: [] }); return; }
+      if (allIds.length === 0) { 
+        // Keep current feed instead of clearing to avoid flicker/vanish
+        return; 
+      }
 
       const { data: activities, error: activitiesError } = await supabase
         .from('sidequest_activities')
