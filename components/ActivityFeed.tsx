@@ -14,15 +14,30 @@ import SidequestCard from './SidequestCard';
 
 interface ActivityFeedProps {
   onRefresh: () => void;
+  searchQuery?: string;
 }
 
-export default function ActivityFeed({ onRefresh }: ActivityFeedProps) {
+export default function ActivityFeed({ onRefresh, searchQuery = '' }: ActivityFeedProps) {
   const userCircles = useSocialStore((state) => state.userCircles);
   const activityFeed = useSocialStore((state) => state.activityFeed);
   const isLoading = useSocialStore((state) => state.isLoading);
 
+  // Filter activities based on search query
+  const filteredActivities = activityFeed.filter(item => {
+    if (!searchQuery) return true;
+    
+    const query = searchQuery.toLowerCase();
+    const title = (item.sidequest?.title || '').toLowerCase();
+    const review = (item.review || '').toLowerCase();
+    const description = (item.description || '').toLowerCase();
+    
+    return title.includes(query) || review.includes(query) || description.includes(query);
+  });
+
   const renderActivityItem = ({ item }: { item: any }) => {
-    const spaceName = userCircles.find(c => c.id === item.circle_id)?.name || 'Unknown Space';
+    const spaceName = userCircles.find(c => 
+      Array.isArray((c as any).sidequest_ids) && (c as any).sidequest_ids.includes(item.id)
+    )?.name || 'Unknown Space';
     
     return (
       <SidequestCard
@@ -43,8 +58,8 @@ export default function ActivityFeed({ onRefresh }: ActivityFeedProps) {
           </Text>
         </View>
       ) : (
-        <FlatList
-          data={activityFeed}
+      <FlatList
+        data={filteredActivities}
           renderItem={renderActivityItem}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
@@ -53,7 +68,7 @@ export default function ActivityFeed({ onRefresh }: ActivityFeedProps) {
               refreshing={isLoading} 
               onRefresh={onRefresh}
               tintColor={Colors.primary}
-              title={null}
+              title={undefined}
             />
           }
         />

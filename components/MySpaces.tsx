@@ -25,9 +25,11 @@ import SpaceCard from './SpaceCard';
 
 interface MySpacesProps {
   onRefresh: () => void;
+  searchQuery?: string;
+  selectedCategory?: string;
 }
 
-export default function MySpaces({ onRefresh }: MySpacesProps) {
+export default function MySpaces({ onRefresh, searchQuery = '', selectedCategory = 'for you' }: MySpacesProps) {
   const router = useRouter();
   const authState = useUserStore((state) => state.authState);
   const userCircles = useSocialStore((state) => state.userCircles);
@@ -46,6 +48,18 @@ export default function MySpaces({ onRefresh }: MySpacesProps) {
   const [displayPicture, setDisplayPicture] = useState<string | undefined>(undefined);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchExpanded, setSearchExpanded] = useState(false);
+
+  // Filter spaces based on search query and category
+  const filteredSpaces = userCircles.filter(circle => {
+    const matchesSearch = !searchQuery || 
+      circle.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      circle.description?.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    // For now, assume all circles match any category since category isn't implemented yet
+    const matchesCategory = selectedCategory === 'for you' || true;
+    
+    return matchesSearch && matchesCategory;
+  });
 
   const copyToClipboard = async (text: string, message: string) => {
     try {
@@ -266,7 +280,7 @@ export default function MySpaces({ onRefresh }: MySpacesProps) {
         </View>
       ) : (
         <FlatList
-          data={userCircles}
+          data={filteredSpaces}
           renderItem={renderCircleCard}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
