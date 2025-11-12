@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Tabs, useRouter } from 'expo-router';
 import { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
-import { Colors, Components, ComponentSizes, Typography } from '../../constants/theme';
+import { Colors, Spacing, Typography } from '../../constants/theme';
 import { useUserStore } from '../../stores';
 
 export default function TabLayout() {
@@ -69,7 +69,17 @@ export default function TabLayout() {
         tabBarActiveTintColor: Colors.primary,
         tabBarInactiveTintColor: Colors.textSecondary,
         tabBarStyle: {
-          ...Components.tabBar,
+          backgroundColor: Colors.white,
+          borderTopColor: Colors.borderLight,
+          borderTopWidth: 1,
+          paddingTop: Spacing.sm,
+          height: 84,
+          paddingBottom: 20,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.05,
+          shadowRadius: 2,
+          elevation: 2,
         },
         tabBarLabelStyle: {
           fontSize: Typography.fontSize.xs,
@@ -95,6 +105,20 @@ export default function TabLayout() {
       }}
     >
       <Tabs.Screen
+        name="discover"
+        options={{
+          title: 'Discover',
+          headerShown: false,
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons 
+              name={focused ? "location" : "location-outline"} 
+              size={20} 
+              color={color} 
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="social"
         options={{
           title: 'Spaces',
@@ -102,7 +126,7 @@ export default function TabLayout() {
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons 
               name={focused ? "people" : "people-outline"} 
-              size={ComponentSizes.icon.medium} 
+              size={20} 
               color={color} 
             />
           ),
@@ -116,7 +140,7 @@ export default function TabLayout() {
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons 
               name={focused ? "list" : "list-outline"} 
-              size={ComponentSizes.icon.medium} 
+              size={20} 
               color={color} 
             />
           ),

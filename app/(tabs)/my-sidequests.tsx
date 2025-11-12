@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { LoadingCard } from '../../components/LoadingScreen';
 import SidequestCard from '../../components/SidequestCard';
-import { BorderRadius, Colors, ComponentSizes, Shadows, Spacing, Typography } from '../../constants/theme';
+import { BorderRadius, Colors, ComponentSizes, Spacing, Typography } from '../../constants/theme';
 import { useSidequestStore, useUserStore } from '../../stores';
 
 export default function MySidequests() {
@@ -222,13 +222,14 @@ const styles = StyleSheet.create({
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.white,
+    backgroundColor: Colors.backgroundSecondary,
     borderRadius: BorderRadius.full,
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.md,
     borderWidth: 1,
     borderColor: Colors.border,
     gap: Spacing.md,
+    overflow: 'hidden',
   },
   searchInput: {
     flex: 1,
@@ -271,6 +272,10 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    ...Shadows.lg,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 3,
   },
 });

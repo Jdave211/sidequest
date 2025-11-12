@@ -336,17 +336,17 @@ const styles = StyleSheet.create({
   // Airbnb-style listing card
   listingCard: {
     backgroundColor: Colors.white,
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.xl,
     marginBottom: Spacing.lg,
     overflow: 'hidden',
     // Subtle card shadow/border
     borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.1)',
-    shadowColor: '#000',
-    shadowOpacity: 0.18,
+    borderColor: Colors.border,
+    shadowColor: Colors.gray500,
+    shadowOpacity: 0.03,
     shadowRadius: 16,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
   },
   contentTexture: {
     ...BackgroundTextures.paper,
@@ -380,7 +380,7 @@ const styles = StyleSheet.create({
   // Content section
   listingContent: {
     padding: Spacing.lg,
-    backgroundColor: '#FAF9F6',
+    backgroundColor: Colors.white,
   },
   titleRow: {
     flexDirection: 'row',

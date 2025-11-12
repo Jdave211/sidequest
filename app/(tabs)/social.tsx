@@ -5,14 +5,14 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-  Dimensions,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    Dimensions,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import ActivityFeed from '../../components/ActivityFeed';
 import MySpaces from '../../components/MySpaces';
@@ -142,7 +142,7 @@ export default function Social() {
   const renderModernHeader = () => (
     <View style={styles.modernHeader}>
       <LinearGradient
-        colors={['#8B9DC3', '#A8B5D1', '#C5D2E8']}
+        colors={[Colors.primary, Colors.primaryLight, Colors.white]}
         style={styles.headerGradient}
       >
         <SafeAreaView>
@@ -151,7 +151,7 @@ export default function Social() {
             <View style={styles.headerTop}>
               <View style={styles.logoSection}>
                 <View style={styles.logoContainer}>
-                  <Ionicons name="diamond" size={24} color="#fff" />
+                  <Ionicons name="diamond" size={26} color="#fff" />
       </View>
                 <Text style={styles.appName}>Sidequest</Text>
               </View>
@@ -168,11 +168,11 @@ export default function Social() {
             <View style={styles.searchSection}>
               <BlurView intensity={20} tint="light" style={styles.searchBlur}>
                 <View style={styles.searchContainer}>
-                  <Ionicons name="search" size={20} color="#666" />
+                  <Ionicons name="search" size={22} color={Colors.textPrimary} />
                   <TextInput
                     style={styles.searchInput}
                     placeholder={activeTab === 'spaces' ? 'Search spaces' : 'Search activities'}
-                    placeholderTextColor="#999"
+                    placeholderTextColor={Colors.textSecondary}
                     value={searchQuery}
                     onChangeText={setSearchQuery}
                   />
@@ -216,7 +216,7 @@ export default function Social() {
                 <Ionicons 
                   name="pulse" 
                   size={18} 
-                  color={activeTab === 'feed' ? '#667eea' : '#fff'} 
+                  color={activeTab === 'feed' ? Colors.primary : '#fff'} 
                 />
                 <Text style={[styles.modernTabText, activeTab === 'feed' && styles.modernTabTextActive]}>
                   Activity
@@ -230,7 +230,7 @@ export default function Social() {
                 <Ionicons 
                   name="grid" 
                   size={18} 
-                  color={activeTab === 'spaces' ? '#667eea' : '#fff'} 
+                  color={activeTab === 'spaces' ? Colors.primary : '#fff'} 
                 />
                 <Text style={[styles.modernTabText, activeTab === 'spaces' && styles.modernTabTextActive]}>
                   Spaces
@@ -262,14 +262,14 @@ export default function Social() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: Colors.backgroundSecondary,
   },
   modernHeader: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowColor: Colors.gray500,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 2,
   },
   headerGradient: {
     paddingBottom: 16,
@@ -290,39 +290,55 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   logoContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  appName: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#fff',
-    letterSpacing: -0.5,
-  },
-  profileButton: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  profileImage: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  appName: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#fff',
+    letterSpacing: -0.5,
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  profileButton: {
+    shadowColor: Colors.gray500,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+  },
+  profileImage: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.3)',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: 'rgba(255,255,255,0.5)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
   },
   profileInitial: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 18,
+    fontWeight: '700',
     color: '#fff',
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   searchSection: {
     marginBottom: 16,
@@ -330,19 +346,25 @@ const styles = StyleSheet.create({
   searchBlur: {
     borderRadius: 25,
     overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
     gap: 12,
   },
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: '#333',
-    fontWeight: '500',
+    color: Colors.textPrimary,
+    fontWeight: '600',
   },
   categoriesContainer: {
     paddingVertical: 8,
@@ -352,13 +374,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.25)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: 'rgba(255,255,255,0.4)',
   },
   categoryChipActive: {
-    backgroundColor: '#fff',
-    borderColor: '#fff',
+    backgroundColor: Colors.white,
+    borderColor: Colors.white,
   },
   categoryText: {
     fontSize: 14,
@@ -367,7 +389,7 @@ const styles = StyleSheet.create({
     textTransform: 'capitalize',
   },
   categoryTextActive: {
-    color: '#667eea',
+    color: Colors.primary,
   },
   modernTabContainer: {
     flexDirection: 'row',
@@ -386,12 +408,12 @@ const styles = StyleSheet.create({
     borderRadius: 21,
   },
   modernTabActive: {
-    backgroundColor: '#fff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    backgroundColor: Colors.white,
+    shadowColor: Colors.gray500,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
     shadowRadius: 4,
-    elevation: 4,
+    elevation: 2,
   },
   modernTabText: {
     fontSize: 14,
@@ -399,11 +421,11 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   modernTabTextActive: {
-    color: '#667eea',
+    color: Colors.primary,
   },
   contentContainer: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: Colors.backgroundSecondary,
   },
   emptyState: {
     flex: 1,
