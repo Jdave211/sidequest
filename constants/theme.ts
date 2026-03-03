@@ -26,56 +26,59 @@ const moderateScale = (size: number, factor: number = 0.5): number => {
 
 // Ocean-inspired theme constants
 export const Colors = {
-  // Primary colors
-  primary: '#4A90E2', // Light ocean blue
-  primaryLight: '#6BA3E8',
-  primaryDark: '#3A7BD5',
+  // Primary colors - Updated to match the "TripBFF" blue
+  primary: '#007AFF',
+  primaryLight: '#5AC8FA',
+  primaryDark: '#0051A8',
   
-  // Neutrals (Airbnb's sophisticated grays)
+  // Neutrals
   white: '#FFFFFF',
-  gray50: '#F7F7F7',
-  gray100: '#F0F0F0',
-  gray200: '#DDDDDD',
-  gray300: '#B0B0B0',
-  gray400: '#717171',
-  gray500: '#484848',
-  gray600: '#222222',
+  gray50: '#F9FAFB',
+  gray100: '#F3F4F6',
+  gray200: '#E5E7EB',
+  gray300: '#D1D5DB',
+  gray400: '#9CA3AF',
+  gray500: '#6B7280',
+  gray600: '#4B5563',
+  gray700: '#374151',
+  gray800: '#1F2937',
+  gray900: '#111827',
   black: '#000000',
   
   // Semantic colors
-  success: '#20B2AA', // Light sea green
-  warning: '#FF8C42', // Ocean sunset orange
-  error: '#FF6B6B', // Coral red
-  info: '#4A90E2', // Ocean blue
+  success: '#34C759',
+  warning: '#FF9500',
+  error: '#FF3B30',
+  info: '#5856D6',
   
   // Background colors
-  background: '#FAFAFA', // Subtle off-white with warmth
-  backgroundSecondary: '#F5F5F5', // Slightly darker off-white
-  surface: '#FFFFFF', // Pure white for cards to create contrast
-  backgroundTertiary: '#F9F9F9', // Very subtle texture background
+  background: '#F2F2F7', // iOS system grouped background
+  backgroundSecondary: '#FFFFFF',
+  surface: '#FFFFFF',
+  backgroundTertiary: '#E5E5EA',
   
   // Text colors
-  textPrimary: '#222222',
-  textSecondary: '#717171',
-  textTertiary: '#B0B0B0',
+  textPrimary: '#000000',
+  textSecondary: '#6B7280', // Gray for secondary text
+  textTertiary: '#9CA3AF',
   textInverse: '#FFFFFF',
   
   // Border colors
-  border: '#DDDDDD',
-  borderLight: '#F0F0F0',
+  border: '#E5E7EB',
+  borderLight: '#F3F4F6',
   
   // Status colors
-  statusCompleted: '#20B2AA', // Light sea green
-  statusInProgress: '#4A90E2', // Ocean blue
-  statusPaused: '#FF8C42', // Ocean sunset orange
-  statusNotStarted: '#717171',
-  statusAbandoned: '#FF6B6B', // Coral red
+  statusCompleted: '#34C759',
+  statusInProgress: '#007AFF',
+  statusPaused: '#FF9500',
+  statusNotStarted: '#9CA3AF',
+  statusAbandoned: '#FF3B30',
   
   // Difficulty colors
-  difficultyEasy: '#20B2AA', // Light sea green
-  difficultyMedium: '#4A90E2', // Ocean blue
-  difficultyHard: '#FF8C42', // Ocean sunset orange
-  difficultyExpert: '#FF6B6B', // Coral red
+  difficultyEasy: '#34C759',
+  difficultyMedium: '#007AFF',
+  difficultyHard: '#FF9500',
+  difficultyExpert: '#FF3B30',
 };
 
 export const Typography = {
@@ -93,31 +96,32 @@ export const Typography = {
     medium: '500' as const,
     semibold: '600' as const,
     bold: '700' as const,
+    heavy: '800' as const,
   },
   
   // Responsive font sizes
   fontSize: {
     xs: moderateScale(12),
-    sm: moderateScale(14),
-    base: moderateScale(16),
-    lg: moderateScale(18),
+    sm: moderateScale(13), // Slightly smaller for dense info
+    base: moderateScale(15), // Standard iOS body size
+    lg: moderateScale(17),
     xl: moderateScale(20),
-    '2xl': moderateScale(24),
+    '2xl': moderateScale(22),
     '3xl': moderateScale(28),
-    '4xl': moderateScale(32),
-    '5xl': moderateScale(36),
+    '4xl': moderateScale(34),
+    '5xl': moderateScale(40),
   },
   
   // Responsive line heights
   lineHeight: {
     xs: moderateScale(16),
-    sm: moderateScale(20),
-    base: moderateScale(24),
-    lg: moderateScale(28),
-    xl: moderateScale(32),
-    '2xl': moderateScale(36),
-    '3xl': moderateScale(40),
-    '4xl': moderateScale(44),
+    sm: moderateScale(18),
+    base: moderateScale(22),
+    lg: moderateScale(24),
+    xl: moderateScale(28),
+    '2xl': moderateScale(30),
+    '3xl': moderateScale(34),
+    '4xl': moderateScale(41),
     '5xl': moderateScale(48),
   },
 };
@@ -149,30 +153,30 @@ export const BorderRadius = {
 export const Shadows = {
   sm: {
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: scale(1) },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
-    shadowRadius: scale(2),
+    shadowRadius: 2,
     elevation: 2,
   },
   md: {
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: scale(2) },
-    shadowOpacity: 0.08,
-    shadowRadius: scale(4),
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
     elevation: 4,
   },
   lg: {
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: scale(4) },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.12,
-    shadowRadius: scale(8),
+    shadowRadius: 16,
     elevation: 8,
   },
   xl: {
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: scale(8) },
+    shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.15,
-    shadowRadius: scale(16),
+    shadowRadius: 24,
     elevation: 16,
   },
 };
@@ -184,7 +188,7 @@ export const ComponentSizes = {
     small: {
       paddingHorizontal: scale(12),
       paddingVertical: scale(8),
-      minHeight: verticalScale(36),
+      minHeight: verticalScale(32),
     },
     medium: {
       paddingHorizontal: scale(16),
@@ -194,7 +198,7 @@ export const ComponentSizes = {
     large: {
       paddingHorizontal: scale(20),
       paddingVertical: scale(16),
-      minHeight: verticalScale(52),
+      minHeight: verticalScale(50),
     },
   },
   
@@ -253,8 +257,8 @@ export const ComponentSizes = {
   
   // Search bar
   searchBar: {
-    height: verticalScale(44),
-    paddingHorizontal: scale(16),
+    height: verticalScale(40),
+    paddingHorizontal: scale(12),
   },
   
   // Badge
@@ -278,8 +282,8 @@ export const ComponentSizes = {
   
   // Modal
   modal: {
-    borderRadius: scale(16),
-    padding: scale(20),
+    borderRadius: scale(24),
+    padding: scale(24),
   },
 };
 
@@ -287,7 +291,7 @@ export const ComponentSizes = {
 export const Components = {
   card: {
     backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.xl,
     padding: ComponentSizes.card.padding,
     minHeight: ComponentSizes.card.minHeight,
     ...Shadows.md,
@@ -296,41 +300,41 @@ export const Components = {
   button: {
     primary: {
       backgroundColor: Colors.primary,
-      borderRadius: BorderRadius.md,
+      borderRadius: BorderRadius.full,
       ...ComponentSizes.button.medium,
     },
     secondary: {
       backgroundColor: Colors.white,
       borderColor: Colors.border,
       borderWidth: 1,
-      borderRadius: BorderRadius.md,
+      borderRadius: BorderRadius.full,
       ...ComponentSizes.button.medium,
     },
     small: {
       backgroundColor: Colors.primary,
-      borderRadius: BorderRadius.md,
+      borderRadius: BorderRadius.full,
       ...ComponentSizes.button.small,
     },
     large: {
       backgroundColor: Colors.primary,
-      borderRadius: BorderRadius.md,
+      borderRadius: BorderRadius.full,
       ...ComponentSizes.button.large,
     },
   },
   
   input: {
-    backgroundColor: Colors.white,
-    borderColor: Colors.border,
+    backgroundColor: Colors.gray100,
+    borderColor: 'transparent',
     borderWidth: 1,
-    borderRadius: BorderRadius.md,
+    borderRadius: BorderRadius.lg,
     ...ComponentSizes.input.medium,
     fontSize: Typography.fontSize.base,
     color: Colors.textPrimary,
   },
   
   searchBar: {
-    backgroundColor: Colors.gray100,
-    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.gray200,
+    borderRadius: BorderRadius.lg,
     ...ComponentSizes.searchBar,
     fontSize: Typography.fontSize.base,
     color: Colors.textPrimary,
@@ -359,13 +363,6 @@ export const BackgroundTextures = {
   // Subtle noise pattern for main background
   subtle: {
     backgroundColor: Colors.background,
-    // Add a very subtle pattern using linear gradient to simulate texture
-    backgroundImage: `linear-gradient(45deg, ${Colors.backgroundTertiary} 25%, transparent 25%), 
-                      linear-gradient(-45deg, ${Colors.backgroundTertiary} 25%, transparent 25%), 
-                      linear-gradient(45deg, transparent 75%, ${Colors.backgroundTertiary} 75%), 
-                      linear-gradient(-45deg, transparent 75%, ${Colors.backgroundTertiary} 75%)`,
-    backgroundSize: '20px 20px',
-    backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0px',
   },
   
   // Very subtle grain texture
@@ -426,4 +423,4 @@ export const getDifficultyColor = (difficulty: string) => {
     default:
       return Colors.gray400;
   }
-}; 
+};

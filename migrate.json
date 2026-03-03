@@ -1,0 +1,6 @@
+{
+  "migrations-folder": "./migrations",
+  "migration-file-language": "sql",
+  "database-url-env-var": "DATABASE_URL"
+}
+

@@ -1,14 +1,22 @@
 {
   "name": "sidequest",
-  "main": "expo-router/entry",
+  "main": "server/api/src/index.js",
   "version": "1.0.0",
   "scripts": {
-    "start": "expo start",
-    "reset-project": "node ./scripts/reset-project.js",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
-    "web": "expo start --web",
-    "lint": "expo lint"
+    "start": "npm run server:dev",
+    "ios": "echo 'Swift-only mode: open client/ios in Xcode and run Sidequest.'",
+    "swift:check": "bash scripts/swift_typecheck.sh",
+    "swift:open": "open -a Xcode client/ios",
+    "legacy:expo:start": "expo start",
+    "legacy:expo:ios": "expo start --ios",
+    "legacy:expo:android": "expo start --android",
+    "legacy:expo:web": "expo start --web",
+    "server:dev": "node server/api/src/index.js",
+    "lint": "node --check server/api/src/index.js && npm run swift:check",
+    "migrate": "node-pg-migrate",
+    "migrate:up": "node-pg-migrate up",
+    "migrate:down": "node-pg-migrate down",
+    "migrate:create": "node-pg-migrate create"
   },
   "dependencies": {
     "@expo/vector-icons": "^14.1.0",
@@ -53,8 +61,11 @@
   "devDependencies": {
     "@babel/core": "^7.25.2",
     "@types/react": "~19.0.10",
+    "dotenv": "^17.3.1",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~9.2.0",
+    "node-pg-migrate": "^8.0.4",
+    "pg": "^8.18.0",
     "typescript": "~5.8.3"
   },
   "private": true

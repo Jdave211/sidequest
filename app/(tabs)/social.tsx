@@ -1,450 +1,313 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from '@react-navigation/native';
-import { BlurView } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
-    Dimensions,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  TextInput,
 } from 'react-native';
-import ActivityFeed from '../../components/ActivityFeed';
-import MySpaces from '../../components/MySpaces';
-import QuoteScreen from '../../components/QuoteScreen';
-import { Colors, ComponentSizes, Spacing, Typography } from '../../constants/theme';
-import { useSocialStore, useUserStore } from '../../stores';
+import Animated, { FadeInDown, Layout, SlideInRight } from 'react-native-reanimated';
+import { BorderRadius, Spacing, Typography } from '../../constants/theme';
 
-type SocialTab = 'spaces' | 'feed';
+type ThreadType = 'all' | 'dms' | 'plans';
 
-const { width: screenWidth } = Dimensions.get('window');
+type Thread = {
+  id: string;
+  name: string;
+  preview: string;
+  time: string;
+  unread: number;
+  type: ThreadType;
+  avatarColor: string;
+};
+
+const THREADS: Thread[] = [
+  {
+    id: 't1',
+    name: 'Andre',
+    preview: 'I posted indoor skydiving details in the plan.',
+    time: '2m',
+    unread: 2,
+    type: 'dms',
+    avatarColor: '#DCE8FA',
+  },
+  {
+    id: 't2',
+    name: 'Skydiving Group',
+    preview: '3 new join requests waiting for approval.',
+    time: '9m',
+    unread: 1,
+    type: 'plans',
+    avatarColor: '#FAE8E8',
+  },
+  {
+    id: 't3',
+    name: 'Local Sidequest Crew',
+    preview: 'Who can host next Saturday?',
+    time: '1h',
+    unread: 0,
+    type: 'plans',
+    avatarColor: '#E8FAE9',
+  },
+  {
+    id: 't4',
+    name: 'Maya',
+    preview: 'Can I follow your travel sidequests?',
+    time: '3h',
+    unread: 0,
+    type: 'dms',
+    avatarColor: '#FAF5E8',
+  },
+];
+
+const FILTERS: { id: ThreadType; label: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'dms', label: 'DMs' },
+  { id: 'plans', label: 'Plans' },
+];
+
+const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
 
 export default function Social() {
-  const authState = useUserStore((state) => state.authState);
-  const userCircles = useSocialStore((state) => state.userCircles);
-  const isLoading = useSocialStore((state) => state.isLoading);
-  const loadActivityFeed = useSocialStore((state) => state.loadActivityFeed);
-  const loadGlobalActivityFeed = useSocialStore((state) => state.loadGlobalActivityFeed);
-  const loadUserCircles = useSocialStore((state) => state.loadUserCircles);
-  const setLoading = useSocialStore((state) => state.setLoading);
-  
-  const { showQuotes } = useLocalSearchParams<{ showQuotes?: string }>();
-  const [activeTab, setActiveTab] = useState<SocialTab>('feed');
-  const [isInitialLoad, setIsInitialLoad] = useState(true);
-  const [showQuoteScreen, setShowQuoteScreen] = useState(showQuotes === 'true');
-  const [dataPreloaded, setDataPreloaded] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<ThreadType>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('for you');
 
-  const categories = ['for you', 'adventure', 'creative', 'fitness', 'learning', 'social'];
+  const visibleThreads = useMemo(() => {
+    let threads = activeFilter === 'all' 
+      ? THREADS 
+      : THREADS.filter((thread) => thread.type === activeFilter);
 
-  // Load circles and activity feed after sign-in (quote overlay is purely visual)
-  useEffect(() => {
-    if (authState.user) {
-      const loadData = async () => {
-        try {
-          setLoading(true);
-          await loadUserCircles(authState.user?.id || '');
-          const circles = useSocialStore.getState().userCircles;
-          if (circles.length > 0) {
-            await loadGlobalActivityFeed(circles.map(c => c.id));
-          }
-          setDataPreloaded(true);
-    } catch (error) {
-          console.error('Error loading data:', error);
-          setDataPreloaded(true);
-        } finally {
-          setLoading(false);
-        }
-      };
-      loadData();
-      setIsInitialLoad(false);
+    if (searchQuery) {
+      threads = threads.filter(t => 
+        t.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+        t.preview.toLowerCase().includes(searchQuery.toLowerCase())
+      );
     }
-  }, [authState.user, loadUserCircles, loadGlobalActivityFeed]);
+    return threads;
+  }, [activeFilter, searchQuery]);
 
-  const onRefreshFeed = () => {
-    if (authState.user) {
-      const ids = userCircles.map(c => c.id);
-      loadGlobalActivityFeed(ids);
-    }
-  };
+  const requestCount = 0;
 
-  const onRefreshSpaces = () => {
-    if (authState.user) {
-      loadUserCircles(authState.user.id);
-    }
-  };
-
-  // When tab switches to 'feed', ensure we load the global feed (not last opened space)
-  React.useEffect(() => {
-    if (authState.user && activeTab === 'feed') {
-      const ids = userCircles.map(c => c.id);
-      (async () => {
-        try {
-          setLoading(true);
-          await loadGlobalActivityFeed(ids);
-        } finally {
-          setLoading(false);
-        }
-      })();
-    }
-  }, [activeTab, authState.user, userCircles, loadGlobalActivityFeed]);
-
-  // Also refresh global feed whenever this screen regains focus
-  useFocusEffect(
-    React.useCallback(() => {
-      if (authState.user && activeTab === 'feed') {
-        const ids = useSocialStore.getState().userCircles.map(c => c.id);
-        (async () => {
-          try {
-            setLoading(true);
-            await loadGlobalActivityFeed(ids);
-          } finally {
-            setLoading(false);
-          }
-        })();
-      }
-      return () => {};
-    }, [authState.user, activeTab, loadGlobalActivityFeed])
-  );
-
-  if (!authState.user) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.emptyState}>
-          <Ionicons name="people-outline" size={ComponentSizes.icon.xlarge} color={Colors.textSecondary} />
-          <Text style={styles.emptyTitle}>Sign In Required</Text>
-          <Text style={styles.emptyDescription}>
-            Please sign in to access social features and join friend circles.
-        </Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  // Show quote screen while loading data after sign-in
-  if (showQuoteScreen && !dataPreloaded) {
   return (
-      <QuoteScreen
-        onComplete={() => setShowQuoteScreen(false)}
-        duration={2500}
-      />
-    );
-  }
+    <SafeAreaView style={styles.container}>
+      <Animated.View entering={FadeInDown.duration(600).springify()} style={styles.header}>
+        <View style={styles.headerTop}>
+          <Text style={styles.title}>Chats</Text>
+          <TouchableOpacity style={styles.requestsButton}>
+            <Text style={styles.requestsButtonText}>{requestCount} Requests</Text>
+          </TouchableOpacity>
+        </View>
+        <TouchableOpacity>
+           <Ionicons name="search" size={24} color="#111827" />
+        </TouchableOpacity>
+      </Animated.View>
 
-  // Remove full-screen loading state
+      <View style={styles.panel}>
+        <View style={styles.segmentContainer}>
+          {FILTERS.map((filter) => {
+            const active = activeFilter === filter.id;
+            return (
+              <TouchableOpacity
+                key={filter.id}
+                style={[styles.segmentItem, active && styles.segmentItemActive]}
+                onPress={() => setActiveFilter(filter.id)}
+              >
+                <Text style={[styles.segmentLabel, active && styles.segmentLabelActive]}>{filter.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
 
-  const renderModernHeader = () => (
-    <View style={styles.modernHeader}>
-      <LinearGradient
-        colors={[Colors.primary, Colors.primaryLight, Colors.white]}
-        style={styles.headerGradient}
-      >
-        <SafeAreaView>
-          <View style={styles.headerContent}>
-            {/* Profile and Logo */}
-            <View style={styles.headerTop}>
-              <View style={styles.logoSection}>
-                <View style={styles.logoContainer}>
-                  <Ionicons name="diamond" size={26} color="#fff" />
-      </View>
-                <Text style={styles.appName}>Sidequest</Text>
+        <ScrollView style={styles.threadList} showsVerticalScrollIndicator={false}>
+          {visibleThreads.map((thread, index) => (
+            <AnimatedTouchableOpacity 
+              key={thread.id} 
+              entering={FadeInDown.delay(index * 100).springify()}
+              layout={Layout.springify()}
+              style={styles.threadRow}
+            >
+              <View style={[styles.avatar, { backgroundColor: thread.avatarColor }]}>
+                <Text style={styles.avatarText}>{thread.name.slice(0, 2).toUpperCase()}</Text>
               </View>
-              <TouchableOpacity style={styles.profileButton}>
-                <View style={styles.profileImage}>
-                  <Text style={styles.profileInitial}>
-                    {authState.user?.displayName?.charAt(0) || 'U'}
-                  </Text>
+              <View style={styles.threadBody}>
+                <View style={styles.threadHeaderLine}>
+                  <Text style={styles.threadName}>{thread.name}</Text>
+                  <Text style={styles.threadTime}>{thread.time}</Text>
                 </View>
-              </TouchableOpacity>
-            </View>
-
-            {/* Search Bar */}
-            <View style={styles.searchSection}>
-              <BlurView intensity={20} tint="light" style={styles.searchBlur}>
-                <View style={styles.searchContainer}>
-                  <Ionicons name="search" size={22} color={Colors.textPrimary} />
-                  <TextInput
-                    style={styles.searchInput}
-                    placeholder={activeTab === 'spaces' ? 'Search spaces' : 'Search activities'}
-                    placeholderTextColor={Colors.textSecondary}
-                    value={searchQuery}
-                    onChangeText={setSearchQuery}
-                  />
-        </View>
-              </BlurView>
-            </View>
-
-            {/* Category Filters */}
-            {activeTab === 'spaces' && (
-              <ScrollView 
-                horizontal 
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.categoriesContainer}
-              >
-                {categories.map((category) => (
-                  <TouchableOpacity
-                    key={category}
-                    style={[
-                      styles.categoryChip,
-                      selectedCategory === category && styles.categoryChipActive
-                    ]}
-                    onPress={() => setSelectedCategory(category)}
-                  >
-                    <Text style={[
-                      styles.categoryText,
-                      selectedCategory === category && styles.categoryTextActive
-                    ]}>
-                      {category}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            )}
-
-            {/* Tab Navigation */}
-            <View style={styles.modernTabContainer}>
-              <TouchableOpacity
-                style={[styles.modernTab, activeTab === 'feed' && styles.modernTabActive]}
-                onPress={() => setActiveTab('feed')}
-              >
-                <Ionicons 
-                  name="pulse" 
-                  size={18} 
-                  color={activeTab === 'feed' ? Colors.primary : '#fff'} 
-                />
-                <Text style={[styles.modernTabText, activeTab === 'feed' && styles.modernTabTextActive]}>
-                  Activity
+                <Text style={[styles.threadPreview, thread.unread > 0 && styles.threadPreviewUnread]} numberOfLines={1}>
+                  {thread.preview}
                 </Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[styles.modernTab, activeTab === 'spaces' && styles.modernTabActive]}
-                onPress={() => setActiveTab('spaces')}
-              >
-                <Ionicons 
-                  name="grid" 
-                  size={18} 
-                  color={activeTab === 'spaces' ? Colors.primary : '#fff'} 
-                />
-                <Text style={[styles.modernTabText, activeTab === 'spaces' && styles.modernTabTextActive]}>
-                  Spaces
-                </Text>
-              </TouchableOpacity>
-            </View>
-            </View>
-        </SafeAreaView>
-      </LinearGradient>
-          </View>
-  );
+              </View>
+              {thread.unread > 0 && (
+                <View style={styles.unreadDot} />
+              )}
+            </AnimatedTouchableOpacity>
+          ))}
 
-  return (
-    <View style={styles.container}>
-      {renderModernHeader()}
-      
-      {/* Content */}
-      <View style={styles.contentContainer}>
-        {activeTab === 'spaces' ? (
-          <MySpaces onRefresh={onRefreshSpaces} searchQuery={searchQuery} selectedCategory={selectedCategory} />
-        ) : (
-          <ActivityFeed onRefresh={onRefreshFeed} searchQuery={searchQuery} />
-        )}
+          {!visibleThreads.length && (
+            <Animated.View entering={FadeInDown.delay(200)} style={styles.emptyState}>
+              <Text style={styles.emptyTitle}>No conversations found</Text>
+              <Text style={styles.emptySubtitle}>Try adjusting your search or filters.</Text>
+            </Animated.View>
+          )}
+        </ScrollView>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: '#FFFFFF',
   },
-  modernHeader: {
-    shadowColor: Colors.gray500,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 12,
-    elevation: 2,
-  },
-  headerGradient: {
-    paddingBottom: 16,
-  },
-  headerContent: {
-    paddingHorizontal: 20,
+  header: {
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   headerTop: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 20,
+    gap: Spacing.md,
   },
-  logoSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  logoContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.4)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  appName: {
-    fontSize: 28,
+  title: {
+    fontSize: 32,
     fontWeight: '800',
-    color: '#fff',
+    color: '#111827',
     letterSpacing: -0.5,
-    textShadowColor: 'rgba(0,0,0,0.3)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
   },
-  profileButton: {
-    shadowColor: Colors.gray500,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
+  requestsButton: {
+    backgroundColor: '#EBF5FF',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.full,
   },
-  profileImage: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.5)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  profileInitial: {
-    fontSize: 18,
+  requestsButtonText: {
+    color: '#1D73EA',
     fontWeight: '700',
-    color: '#fff',
-    textShadowColor: 'rgba(0,0,0,0.3)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    fontSize: 14,
   },
-  searchSection: {
-    marginBottom: 16,
+  panel: {
+    flex: 1,
+    backgroundColor: '#F9FAFB',
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    paddingTop: Spacing.lg,
+    paddingHorizontal: Spacing.lg,
+    marginTop: Spacing.sm,
   },
-  searchBlur: {
-    borderRadius: 25,
-    overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.9)',
+  segmentContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    borderRadius: BorderRadius['2xl'],
+    padding: 4,
+    marginBottom: Spacing.xl,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 18,
-    paddingVertical: 14,
-    gap: 12,
-  },
-  searchInput: {
+  segmentItem: {
     flex: 1,
-    fontSize: 16,
-    color: Colors.textPrimary,
-    fontWeight: '600',
-  },
-  categoriesContainer: {
-    paddingVertical: 8,
-    gap: 12,
-  },
-  categoryChip: {
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.4)',
-  },
-  categoryChipActive: {
-    backgroundColor: Colors.white,
-    borderColor: Colors.white,
-  },
-  categoryText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#fff',
-    textTransform: 'capitalize',
-  },
-  categoryTextActive: {
-    color: Colors.primary,
-  },
-  modernTabContainer: {
-    flexDirection: 'row',
-    marginTop: 16,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 25,
-    padding: 4,
-  },
-  modernTab: {
-    flex: 1,
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    borderRadius: 21,
+    paddingVertical: 10,
+    borderRadius: BorderRadius.xl,
   },
-  modernTabActive: {
-    backgroundColor: Colors.white,
-    shadowColor: Colors.gray500,
-    shadowOffset: { width: 0, height: 1 },
+  segmentItemActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 4,
     elevation: 2,
   },
-  modernTabText: {
-    fontSize: 14,
+  segmentLabel: {
+    color: '#9CA3AF',
     fontWeight: '600',
-    color: '#fff',
+    fontSize: 16,
   },
-  modernTabTextActive: {
-    color: Colors.primary,
+  segmentLabelActive: {
+    color: '#111827',
+    fontWeight: '700',
   },
-  contentContainer: {
+  threadList: {
     flex: 1,
-    backgroundColor: Colors.backgroundSecondary,
   },
-  emptyState: {
+  threadRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.lg,
+    padding: Spacing.xs,
+  },
+  avatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Spacing.md,
+  },
+  avatarText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#374151',
+  },
+  threadBody: {
     flex: 1,
     justifyContent: 'center',
+  },
+  threadHeaderLine: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  threadName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  threadTime: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontWeight: '500',
+  },
+  threadPreview: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '500',
+    lineHeight: 20,
+  },
+  threadPreviewUnread: {
+    color: '#111827',
+    fontWeight: '600',
+  },
+  unreadDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#1D73EA',
+    marginLeft: Spacing.sm,
+  },
+  emptyState: {
     alignItems: 'center',
-    paddingHorizontal: Spacing.xl,
+    marginTop: Spacing['4xl'],
   },
   emptyTitle: {
-    fontSize: Typography.fontSize.xl,
-    fontWeight: Typography.fontWeight.bold,
-    color: Colors.textPrimary,
-    marginVertical: Spacing.md,
-    textAlign: 'center',
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: Spacing.xs,
   },
-  emptyDescription: {
-    fontSize: Typography.fontSize.base,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: Typography.lineHeight.base,
-    marginBottom: Spacing.xl,
+  emptySubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
   },
-}); 
+});
