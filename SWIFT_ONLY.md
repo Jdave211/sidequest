@@ -1,6 +1,6 @@
 # Swift-Only Mode
 
-Expo / React Native is parked for now.
+This repository is Swift client + Node API only.
 
 ## Active pipeline
 - Client: SwiftUI source in `client/ios/Sidequest`
@@ -12,9 +12,3 @@ Expo / React Native is parked for now.
 - Typecheck Swift client: `npm run swift:check`
 - Open Swift workspace in Xcode: `npm run swift:open`
 - Run migrations: `npm run migrate:up`
-
-## Legacy Expo (disabled-by-default)
-If needed temporarily, use explicit legacy commands:
-- `npm run legacy:expo:start`
-- `npm run legacy:expo:ios`
-- `npm run legacy:expo:android`
