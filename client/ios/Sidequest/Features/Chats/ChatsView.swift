@@ -70,7 +70,7 @@ struct ChatsView: View {
                 Text("Chats")
                     .font(.system(size: 34, weight: .heavy))
 
-                Text("0 Requests")
+                Text("Inbox")
                     .font(.headline.weight(.bold))
                     .foregroundStyle(AppTheme.primary)
                     .padding(.horizontal, 14)
