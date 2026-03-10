@@ -5,6 +5,7 @@ struct WorldView: View {
     @StateObject private var vm = DiscoverViewModel()
     @State private var scope: String = "near"
     @State private var showingAddSheet = false
+    @State private var searchTask: Task<Void, Never>?
 
     var body: some View {
         NavigationStack {
@@ -38,17 +39,16 @@ struct WorldView: View {
             .navigationBarTitleDisplayMode(.inline)
             .sidequestTopBar()
             .task {
-                await vm.load(scope: scope, query: vm.query)
-                if let hostId = vm.items.first?.hostUserId { session.adoptKnownUser(hostId) }
+                await reload()
             }
+            .onDisappear { searchTask?.cancel() }
             .sheet(isPresented: $showingAddSheet) {
                 AddSidequestSheet(
                     userId: session.userId,
                     viewModel: vm
                 ) {
                     Task {
-                        await vm.load(scope: scope, query: vm.query)
-                        if let hostId = vm.items.first?.hostUserId { session.adoptKnownUser(hostId) }
+                        await reload()
                     }
                 }
             }
@@ -88,10 +88,13 @@ struct WorldView: View {
             TextField("Search destination or activity", text: $vm.query)
                 .textInputAutocapitalization(.words)
                 .autocorrectionDisabled()
+                .onChange(of: vm.query) { _, newValue in
+                    queueSearch(for: newValue)
+                }
                 .onSubmit {
+                    searchTask?.cancel()
                     Task {
-                        await vm.load(scope: scope, query: vm.query)
-                        if let hostId = vm.items.first?.hostUserId { session.adoptKnownUser(hostId) }
+                        await reload()
                     }
                 }
         }
@@ -115,8 +118,7 @@ struct WorldView: View {
         Button {
             scope = value
             Task {
-                await vm.load(scope: scope, query: vm.query)
-                if let hostId = vm.items.first?.hostUserId { session.adoptKnownUser(hostId) }
+                await reload()
             }
         } label: {
             Text(title)
@@ -183,8 +185,7 @@ struct WorldView: View {
                     Button {
                         Task {
                             await vm.requestJoin(for: item, requesterId: session.userId, requesterName: session.displayName)
-                            await vm.load(scope: scope, query: vm.query)
-                            if let hostId = vm.items.first?.hostUserId { session.adoptKnownUser(hostId) }
+                            await reload()
                         }
                     } label: {
                         Text("Join")
@@ -221,6 +222,24 @@ struct WorldView: View {
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
+    }
+
+    private func queueSearch(for newValue: String) {
+        let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        searchTask?.cancel()
+        guard !trimmed.isEmpty else { return }
+
+        searchTask = Task {
+            try? await Task.sleep(nanoseconds: 450_000_000)
+            guard !Task.isCancelled else { return }
+            await reload()
+        }
+    }
+
+    @MainActor
+    private func reload() async {
+        await vm.load(scope: scope, query: vm.query)
+        if let hostId = vm.items.first?.hostUserId { session.adoptKnownUser(hostId) }
     }
 }
 

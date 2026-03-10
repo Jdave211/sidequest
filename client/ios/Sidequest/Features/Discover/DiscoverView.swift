@@ -13,6 +13,7 @@ struct DiscoverView: View {
     @State private var query = "Columbus, United States"
     @State private var selectedFilter = "learning"
     @State private var selectedId: UUID?
+    @State private var searchTask: Task<Void, Never>?
 
     @State private var region = MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 39.9612, longitude: -82.9988),
@@ -45,9 +46,9 @@ struct DiscoverView: View {
             }
             .background(AppTheme.background.ignoresSafeArea())
             .task {
-                await vm.load(scope: "near", query: query)
-                if let hostId = vm.items.first?.hostUserId { session.adoptKnownUser(hostId) }
+                await loadNearby(with: query)
             }
+            .onDisappear { searchTask?.cancel() }
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .sidequestTopBar()
@@ -95,10 +96,15 @@ struct DiscoverView: View {
                     .foregroundStyle(AppTheme.textPrimary)
                 TextField("Search city...", text: $query)
                     .font(.body.weight(.semibold))
+                    .textInputAutocapitalization(.words)
+                    .autocorrectionDisabled()
+                    .onChange(of: query) { _, newValue in
+                        queueSearch(for: newValue)
+                    }
                     .onSubmit {
+                        searchTask?.cancel()
                         Task {
-                            await vm.load(scope: "near", query: query)
-                            if let hostId = vm.items.first?.hostUserId { session.adoptKnownUser(hostId) }
+                            await loadNearby(with: query)
                         }
                     }
             }
@@ -166,9 +172,9 @@ struct DiscoverView: View {
             }
 
             Button {
+                searchTask?.cancel()
                 Task {
-                    await vm.load(scope: "near", query: query)
-                    if let hostId = vm.items.first?.hostUserId { session.adoptKnownUser(hostId) }
+                    await loadNearby(with: query)
                 }
             } label: {
                 Text("See all \(vm.items.count) Nearby Travelers")
@@ -229,6 +235,24 @@ struct DiscoverView: View {
             latitude: 39.9612 + latOffset,
             longitude: -82.9988 + lonOffset
         )
+    }
+
+    private func queueSearch(for newValue: String) {
+        let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        searchTask?.cancel()
+        guard !trimmed.isEmpty else { return }
+
+        searchTask = Task {
+            try? await Task.sleep(nanoseconds: 450_000_000)
+            guard !Task.isCancelled else { return }
+            await loadNearby(with: trimmed)
+        }
+    }
+
+    @MainActor
+    private func loadNearby(with search: String) async {
+        await vm.load(scope: "near", query: search)
+        if let hostId = vm.items.first?.hostUserId { session.adoptKnownUser(hostId) }
     }
 }
 

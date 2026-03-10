@@ -18,6 +18,7 @@ private struct ThreadItem: Identifiable {
 
 struct ChatsView: View {
     @State private var activeFilter: ThreadFilter = .all
+    @State private var searchQuery = ""
 
     private let rows: [ThreadItem] = [
         .init(id: "t1", name: "Andre", preview: "I posted indoor skydiving details in the plan.", time: "2m", unread: 2, filter: .dms, avatarColor: Color(red: 0.863, green: 0.91, blue: 0.98)),
@@ -27,8 +28,14 @@ struct ChatsView: View {
     ]
 
     private var visibleRows: [ThreadItem] {
-        if activeFilter == .all { return rows }
-        return rows.filter { $0.filter == activeFilter }
+        let scopedRows = activeFilter == .all ? rows : rows.filter { $0.filter == activeFilter }
+        let trimmedQuery = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedQuery.isEmpty else { return scopedRows }
+
+        return scopedRows.filter {
+            $0.name.localizedCaseInsensitiveContains(trimmedQuery)
+                || $0.preview.localizedCaseInsensitiveContains(trimmedQuery)
+        }
     }
 
     var body: some View {
@@ -37,12 +44,21 @@ struct ChatsView: View {
                 header
 
                 VStack(spacing: 18) {
+                    searchBar
                     segmentControl
 
                     ScrollView(showsIndicators: false) {
                         VStack(spacing: 14) {
-                            ForEach(visibleRows) { row in
-                                threadRow(row)
+                            if visibleRows.isEmpty {
+                                Text("No chats match your search.")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(AppTheme.textSecondary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.top, 8)
+                            } else {
+                                ForEach(visibleRows) { row in
+                                    threadRow(row)
+                                }
                             }
                         }
                         .padding(.horizontal, 4)
@@ -87,6 +103,29 @@ struct ChatsView: View {
         }
         .padding(.horizontal, 18)
         .padding(.top, 12)
+    }
+
+    private var searchBar: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(AppTheme.textSecondary)
+            TextField("Search chats", text: $searchQuery)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+            if !searchQuery.isEmpty {
+                Button {
+                    searchQuery = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(AppTheme.textSecondary)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     private var segmentControl: some View {
